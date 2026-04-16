@@ -1,0 +1,2 @@
+# SPA fallback for org paths (/:orgSlug/...). Hosts serve existing files first, then apply this rule.
+/*    /index.html   200

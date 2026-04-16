@@ -1,0 +1,2743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Business Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23e8501a'/%3E%3Ctext x='50%25' y='52%25' text-anchor='middle' font-size='32' fill='white' font-family='sans-serif'%3EBD%3C/text%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  if (typeof Chart !== 'undefined' && Chart.defaults) {
+    Chart.defaults.font.family = '"Helvetica Now Pro Display Medium", system-ui, -apple-system, sans-serif';
+  }
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #fafafa;
+    --bg2:      #ffffff;
+    --bg3:      #f4f4f5;
+    --bg4:      #e4e4e7;
+    --border:   rgba(0,0,0,0.06);
+    --border2:  rgba(0,0,0,0.1);
+    --text:     #0a0a0a;
+    --text2:    #52525b;
+    --text3:    #a1a1aa;
+    --coral:    #e8501a;
+    --coral2:   #d14816;
+    --coral-bg: rgba(232,80,26,0.08);
+    --coral-border-soft: rgba(232,80,26,0.14);
+    --coral-border-mid: rgba(232,80,26,0.18);
+    --coral-border-strong: rgba(232,80,26,0.2);
+    --coral-border-focus: rgba(232,80,26,0.35);
+    --green:    #16a34a;
+    --green-bg: rgba(22,163,74,0.1);
+    --red:      #dc2626;
+    --red-bg:   rgba(220,38,38,0.08);
+    --warning:  #ea580c;
+    --warning-bg: rgba(234,88,12,0.1);
+    --neutral:  #71717a;
+    --neutral-bg: rgba(113,113,122,0.1);
+    --amber:    var(--warning);
+    --amber-bg: var(--warning-bg);
+    --blue:     var(--neutral);
+    --blue-bg:  var(--neutral-bg);
+    --r: 6px; --rl: 8px; --rs: 6px;
+    --font-sans: "Helvetica Now Pro Display Medium", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-fast: 220ms;
+    --dur-med: 360ms;
+    /* Custom <select> chevron (Safari uses heavy native chrome unless appearance is reset) */
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath stroke='%23626262' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+  }
+  /* Host Medium .woff2/.woff in public/fonts/ (rename to match) or rely on local() if the font is installed. */
+  @font-face {
+    font-family: "Helvetica Now Pro Display Medium";
+    src: local("Helvetica Now Pro Display Medium"),
+      local("Helvetica Now Pro Display"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff2") format("woff2"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff") format("woff"),
+      url("/fonts/HelveticaNowProDisplay-Md.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Helvetica Now Pro Display Medium";
+    src: local("Helvetica Now Pro Display Medium"),
+      local("Helvetica Now Pro Display"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff2") format("woff2"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff") format("woff"),
+      url("/fonts/HelveticaNowProDisplay-Md.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Helvetica Now Pro Display Medium";
+    src: local("Helvetica Now Pro Display Medium"),
+      local("Helvetica Now Pro Display"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff2") format("woff2"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff") format("woff"),
+      url("/fonts/HelveticaNowProDisplay-Md.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Helvetica Now Pro Display Medium";
+    src: local("Helvetica Now Pro Display Medium"),
+      local("Helvetica Now Pro Display"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff2") format("woff2"),
+      url("/fonts/HelveticaNowProDisplay-Medium.woff") format("woff"),
+      url("/fonts/HelveticaNowProDisplay-Md.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  body { font-family: var(--font-sans); background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:hidden; font-size:14px; font-style: normal; -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font-family: inherit; font-style: normal; }
+
+  /* SIDEBAR (light surface — accent via active state only) */
+  .sb { width:230px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .sb-logo { padding:16px 14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:center; }
+  /* Legacy text-brand classes kept for possible reuse; sidebar uses .sb-brand-img. */
+  .sb-idm { font-size:28px; font-weight:600; color:var(--text); letter-spacing:-0.03em; line-height:1; }
+  .sb-sub { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:0.05em; line-height:1.4; font-weight:400; }
+  .sb-brand-img { width:100%; max-width:220px; height:auto; display:block; border-radius:0; }
+  .sb-nav { flex:1; display:flex; flex-direction:column; padding:14px 10px; gap:2px; overflow-y:auto; }
+  .nav-lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text3); padding:10px 10px 5px; }
+  .ni { display:flex; align-items:center; gap:10px; padding:9px 12px 9px 9px; border-radius:var(--rs); border-left:3px solid transparent; cursor:pointer; color:var(--text2); font-size:0.875rem; font-weight:500; transition:background .15s,color .15s,border-color .15s; user-select:none; }
+  .ni:hover { background:var(--bg3); color:var(--text); }
+  .ni.active { background:var(--coral-bg); border-left-color:var(--coral); color:var(--coral); font-weight:600; }
+  .ni svg { width:15px; height:15px; flex-shrink:0; }
+  .sb-spacer { flex:1; }
+  .sb-div { height:1px; background:var(--border); margin:6px 0; }
+  .sb-user { display:flex; align-items:center; gap:10px; padding:14px 16px 18px; border-top:1px solid var(--border); color:var(--text2); font-size:13px; cursor:pointer; transition:background .15s; }
+  .sb-user:hover { background:var(--bg3); color:var(--text); }
+  .sb-user-name { font-size:13px; color:var(--text); font-weight:600; line-height:1.25; }
+  .sb-user-role { font-size:11px; color:var(--text3); margin-top:2px; line-height:1.25; }
+  .avatar { width:28px; height:28px; border-radius:50%; background:var(--coral); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:#fff; flex-shrink:0; }
+
+  /* Mobile chrome hidden on desktop; enabled inside @media (max-width: 960px) below */
+  .mobile-topbar,
+  .mobile-nav-overlay {
+    display: none;
+  }
+  .mobile-actions {
+    display: none;
+  }
+
+  /* MAIN */
+  .main { flex:1; overflow-y:auto; background:var(--bg); }
+  .main::-webkit-scrollbar { width:4px; }
+  .main::-webkit-scrollbar-thumb { background:var(--bg4); border-radius:2px; }
+
+  /* PAGES */
+  .pg { display:none; padding:36px 40px 32px; min-height:100%; max-width:1440px; margin:0 auto; width:100%; box-sizing:border-box; }
+  .pg.on { display:block; }
+  .ph { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:28px; }
+  .pt { font-size:1.25rem; font-weight:600; letter-spacing:-0.02em; line-height:1.2; }
+  .pg .pt { font-size:clamp(2.25rem, 4.2vw, 2.75rem); font-weight:700; letter-spacing:-0.035em; line-height:1.08; }
+  .ps { font-size:0.875rem; font-weight:400; color:var(--text3); margin-top:6px; line-height:1.35; }
+  .hr { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+
+  /* Chat — flat workspace with docked composer */
+  #page-chat.pg.on {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: clamp(10px, 2vh, 18px);
+    min-height: calc(100dvh - 72px);
+    box-sizing: border-box;
+  }
+  .chat-shell {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100dvh - 170px);
+    max-height: none;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .chat-shell-header {
+    flex-shrink: 0;
+    padding: 4px 2px 14px;
+    text-align: left;
+    border-bottom: none;
+    background: transparent;
+  }
+  .chat-shell-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    margin: 0;
+  }
+  .chat-shell-sub {
+    font-size: 0.875rem;
+    color: var(--text2);
+    line-height: 1.45;
+    margin: 6px 0 0;
+    max-width: 68rem;
+  }
+  .chat-shell-sub-mobile { display: none; }
+  .chat-transcript {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  .chat-log {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-anchor: none;
+    padding: 14px 2px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: transparent;
+  }
+  .chat-log::-webkit-scrollbar { width: 6px; }
+  .chat-log::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+  .chat-msg {
+    max-width: 92%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--text2);
+  }
+  .chat-msg.user {
+    align-self: flex-end;
+    background: var(--coral-bg);
+    border: 1px solid var(--coral-border-soft);
+    color: var(--text);
+    font-weight: 500;
+  }
+  .chat-msg.asst {
+    align-self: flex-start;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .chat-msg-thinking {
+    white-space: normal;
+  }
+  .chat-thinking-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .chat-thinking-label {
+    font-size: 0.8125rem;
+    color: var(--text3);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .chat-thinking-dots {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    height: 20px;
+  }
+  .chat-thinking-dots span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+    animation: chatThinkingDot 1.05s ease-in-out infinite;
+  }
+  .chat-thinking-dots span:nth-child(2) { animation-delay: 0.18s; }
+  .chat-thinking-dots span:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes chatThinkingDot {
+    0%, 70%, 100% { transform: translateY(0); opacity: 0.3; }
+    35% { transform: translateY(-6px); opacity: 1; }
+  }
+  .chat-composer-stack {
+    flex-shrink: 0;
+    padding: 10px 0 6px;
+    background: transparent;
+    border-top: none;
+  }
+  .chat-prompt-heading {
+    display: none;
+  }
+  .chat-prompt-box {
+    cursor: text;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    padding: 10px 12px 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .chat-prompt-box:focus-within {
+    border-color: var(--coral-border-focus);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  }
+  .chat-file-input-hidden { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+  .chat-image-preview-wrap {
+    position: relative;
+    width: fit-content;
+    margin-bottom: 4px;
+    padding: 4px 4px 0;
+  }
+  .chat-image-preview-wrap img {
+    display: block;
+    width: 58px;
+    height: 58px;
+    object-fit: cover;
+    border-radius: 16px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+  }
+  .chat-image-preview-remove {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  .chat-image-preview-remove:hover { background: var(--bg3); }
+  .chat-prompt-ta {
+    width: 100%;
+    min-height: 42px;
+    max-height: 200px;
+    resize: none;
+    border: none;
+    background: transparent;
+    padding: 10px 4px 8px;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--text);
+    font-family: inherit;
+  }
+  .chat-prompt-ta::placeholder { color: var(--text3); }
+  .chat-prompt-ta:focus { outline: none; }
+  .chat-prompt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0 0;
+    margin-top: 2px;
+  }
+  .chat-prompt-toolbar-spacer { flex: 1; min-width: 8px; }
+  .chat-prompt-icon-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  .chat-prompt-icon-btn:hover { background: var(--bg3); }
+  .chat-prompt-icon-btn svg { width: 22px; height: 22px; }
+  .chat-tools-wrap { position: relative; }
+  .chat-prompt-tools-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px 0 8px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .chat-prompt-tools-trigger:hover { background: var(--bg3); }
+  .chat-prompt-tools-trigger svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .chat-tools-pop {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 50;
+    width: 16rem;
+    max-width: calc(100vw - 48px);
+    padding: 8px;
+    border-radius: 12px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  }
+  .chat-tools-pop[hidden] { display: none !important; }
+  .chat-tool-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 0.8125rem;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .chat-tool-row:hover { background: var(--bg3); }
+  .chat-tool-row svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text2); }
+  .chat-tool-row-extra { margin-left: auto; font-size: 11px; color: var(--text3); }
+  .chat-active-tool {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-active-tool[hidden] { display: none !important; }
+  .chat-active-tool-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+  }
+  .chat-active-tool-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: #2294ff;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .chat-active-tool-chip:hover { background: rgba(34, 148, 255, 0.08); }
+  .chat-active-tool-chip svg { width: 14px; height: 14px; }
+  .chat-prompt-send {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 999px;
+    background: var(--coral);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .chat-prompt-send:hover:not(:disabled) { background: var(--coral2); }
+  .chat-prompt-send:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .chat-prompt-send svg { width: 18px; height: 18px; }
+  .chat-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    border: none;
+    cursor: zoom-out;
+  }
+  .chat-lightbox[hidden] { display: none !important; }
+  .chat-lightbox img {
+    max-width: min(900px, 95vw);
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 24px;
+    pointer-events: none;
+  }
+  .chat-lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .chat-lightbox-close:hover { background: rgba(255, 255, 255, 0.22); }
+  .chat-starters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 0 max(10px, env(safe-area-inset-bottom, 0px));
+    justify-content: flex-start;
+    background: transparent;
+  }
+  /* Typing mode: dock composer near viewport bottom like ChatGPT */
+  #page-chat.chat-compose-docked .chat-shell {
+    padding-bottom: 170px;
+  }
+  #page-chat.chat-compose-docked .chat-composer-stack {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    width: min(44rem, calc(100vw - 28px));
+    z-index: 130;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--bg2);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14);
+    padding: 12px 14px 10px;
+  }
+  #page-chat.chat-compose-docked .chat-prompt-heading,
+  #page-chat.chat-compose-docked .chat-starters {
+    display: none;
+  }
+  .chat-chip {
+    font-size: 11px;
+    padding: 6px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text2);
+    cursor: pointer;
+    font-weight: 500;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .chat-chip:hover {
+    border-color: var(--coral-border-focus);
+    color: var(--coral);
+    background: var(--coral-bg);
+  }
+
+  @media (max-width: 960px) {
+    #page-chat.pg.on {
+      padding-left: 14px;
+      padding-right: 14px;
+      min-height: calc(100dvh - 112px);
+    }
+    .chat-shell {
+      max-height: none;
+      border-radius: 0;
+      min-height: calc(100dvh - 170px);
+    }
+    .chat-shell-header { padding: 4px 0 12px; }
+    .chat-shell-sub { display: none; }
+    .chat-shell-sub-mobile {
+      display: block;
+      font-size: 0.8125rem;
+      color: var(--text2);
+      line-height: 1.4;
+      margin: 6px 0 0;
+      max-width: 100%;
+    }
+    .chat-log { padding: 10px 0; }
+    .chat-composer-stack { padding: 8px 0 4px; }
+    .chat-starters { padding-left: 0; padding-right: 0; }
+  }
+
+  /* BTN */
+  .btn { padding:8px 14px; border-radius:6px; border:1px solid var(--border2); background:var(--bg2); color:var(--text2); font-size:0.875rem; cursor:pointer; transition:border-color .15s,color .15s,background .15s,box-shadow .15s; font-weight:500; }
+  .btn:hover { border-color:var(--border2); color:var(--text); background:var(--bg3); }
+  .btn:active { transform: translateY(1px) scale(0.995); }
+  .btn-p { background:var(--coral); border-color:var(--coral); color:#fff; font-weight:600; }
+  .btn-p:hover { background:var(--coral2); border-color:var(--coral2); color:#fff; }
+  .exp-rec-dow { width:34px; height:34px; border-radius:50%; padding:0; font-size:11px; font-weight:600; flex-shrink:0; border:1px solid var(--border2); background:var(--bg3); color:var(--text2); }
+  .exp-rec-dow.on { background:var(--coral); border-color:var(--coral); color:#fff; }
+
+  /* CARD */
+  .card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--rl); padding:22px 24px; box-shadow:none; }
+  .card,
+  .kc,
+  .ts-kpi,
+  .spend-kpi,
+  .spend-top-vendors-wrap,
+  .bva-row {
+    transition: transform var(--dur-fast) var(--ease-premium), box-shadow var(--dur-fast) var(--ease-premium), border-color var(--dur-fast) var(--ease-premium);
+  }
+  .card:hover,
+  .kc:hover,
+  .ts-kpi:hover,
+  .spend-kpi:hover,
+  .spend-top-vendors-wrap:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+  .motion-item {
+    opacity: 0;
+    transform: translateY(10px) scale(0.996);
+    will-change: opacity, transform;
+  }
+  .motion-item.motion-in {
+    animation: premiumEnter var(--dur-med) var(--ease-premium) both;
+    animation-delay: var(--motion-delay, 0ms);
+  }
+  .rollout-panel {
+    overflow: hidden;
+    height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: height var(--dur-med) var(--ease-premium), opacity var(--dur-fast) ease, transform var(--dur-med) var(--ease-premium);
+  }
+  .rollout-panel.on {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  @keyframes premiumEnter {
+    from { opacity: 0; transform: translateY(12px) scale(0.996); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* KPI */
+  .kg { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .kg-dash { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .kc { background:var(--bg2); border:1px solid var(--border); border-radius:var(--rl); padding:20px 22px; box-shadow:none; }
+  .kc.hi { background:var(--coral-bg); border-color:var(--coral-border-mid); }
+  .kc.hi .kl { color:var(--text2); }
+  .kc.hi .kv { color:var(--text); }
+  .kl { font-size:0.6875rem; font-weight:500; color:var(--text3); margin-bottom:8px; letter-spacing:0.04em; text-transform:uppercase; }
+  .kv { font-size:clamp(1.75rem, 2.5vw, 2rem); font-weight:700; letter-spacing:-0.04em; line-height:1.02; margin-bottom:8px; font-variant-numeric:tabular-nums; }
+  .kb { display:inline-flex; align-items:center; font-size:0.625rem; padding:2px 6px; border-radius:6px; font-weight:600; line-height:1.2; }
+  .bu { background:var(--green-bg); color:var(--green); }
+  .bd { background:var(--red-bg); color:var(--red); }
+  .bn { background:var(--bg3); color:var(--text3); }
+  .bw { background:var(--bg2); color:var(--coral); border:1px solid var(--coral-border-strong); }
+  .bc { background:var(--coral-bg); color:var(--coral); }
+  #page-dashboard .kg .kb { font-size:0.6875rem; padding:3px 8px; min-height:20px; }
+  .kf { margin-top:6px; font-size:0.625rem; font-weight:400; line-height:1.35; color:var(--text3); letter-spacing:0.02em; text-transform:none; }
+
+  /* LAYOUT */
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+  .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:20px; }
+  .gm { display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:20px; }
+  .mb { margin-bottom:20px; }
+  .cw { position:relative; width:100%; height:220px; display:flex; align-items:center; justify-content:center; }
+  .cw canvas { max-height:200px; max-width:100%; }
+
+  /* SECTION HEAD */
+  .sh { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .st { font-size:0.9375rem; font-weight:600; letter-spacing:-0.02em; color:var(--text); }
+  .ss { font-size:0.8125rem; font-weight:400; color:var(--text3); }
+
+  /* Insights alerts (revenue vs spending) */
+  .insights-alerts-wrap { margin-bottom: 18px; }
+  #page-insights .insights-alerts-wrap { margin-bottom: 8px; }
+  .insights-alerts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 28px;
+    align-items: start;
+  }
+  .insights-alerts-lbl {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+  #page-insights .insights-alerts-lbl { margin-bottom: 2px; }
+  .insights-alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* TABLE */
+  .dt { width:100%; border-collapse:collapse; font-size:0.875rem; font-weight:400; font-variant-numeric:tabular-nums; }
+  .dt thead th { text-align:left; padding:12px 16px; font-size:0.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--text3); border-bottom:1px solid var(--border); vertical-align:middle; }
+  .dt td { padding:14px 16px; border-bottom:1px solid rgba(0,0,0,0.04); color:var(--text2); vertical-align:middle; line-height:1.45; }
+  .dt tbody tr { height:52px; }
+  .dt tbody tr:last-child td { border-bottom:none; }
+  .card .dt tbody tr:last-child td { border-bottom:none; }
+  .dt tr:hover td { background:rgba(0,0,0,0.02); }
+  .tdp { color:var(--text) !important; font-weight:500; }
+  .td-sub { display:block; font-size:0.75rem; font-weight:400; opacity:0.72; margin-top:2px; line-height:1.35; }
+
+  .dt .btn { font-size:0.75rem; padding:5px 10px; border-radius:6px; font-weight:500; }
+  #customers-table th:last-child,
+  #customers-table td:last-child { min-width: 120px; }
+  /* Keep customer rows visually aligned when some cells wrap to multiple lines. */
+  #customers-table thead th { vertical-align: top; }
+  #customers-table tbody td {
+    vertical-align: top;
+    line-height: 1.35;
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+  #customers-table tbody td:last-child > div {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+  #customers-table .td-truncate {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #customers-table td:nth-child(1).td-truncate { max-width: 200px; }
+  #customers-table td:nth-child(3).td-truncate { max-width: 220px; }
+  #customers-table td:nth-child(4).td-truncate { max-width: 130px; }
+  /* Keep columns menu above customer cards but below modal overlays. */
+  #page-customers .ph { position: relative; z-index: 90; }
+  .customers-columns-wrap { position: relative; z-index: 91; }
+  #customers-columns-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 95;
+    min-width: 220px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    display: none;
+  }
+  #customers-columns-panel.on { display: block; }
+  .customers-col-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text2);
+    padding: 6px 4px;
+  }
+  .customers-col-opt input { margin: 0; }
+  .customers-col-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .dt select.fi {
+    border-radius:6px;
+    background-color:transparent;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 11px;
+    -webkit-appearance: none;
+    appearance: none;
+    border-color:transparent;
+    box-shadow:none;
+    font-size:0.875rem;
+    font-weight:400;
+    padding:6px 28px 6px 8px;
+    min-height:36px;
+  }
+  .dt select.fi:hover {
+    border-color:var(--border);
+    background-color:var(--bg3);
+    background-image: var(--select-chevron);
+  }
+  .dt select.fi:focus {
+    border-color:var(--border2);
+    background-color:var(--bg2);
+    background-image: var(--select-chevron);
+  }
+  .dt .project-row-status,
+  .dt .fi.project-row-status {
+    border-radius:6px;
+    background:transparent;
+    border-color:transparent;
+    box-shadow:none;
+    font-size:0.875rem;
+    font-weight:400;
+    padding:6px 8px;
+    min-height:36px;
+  }
+  .dt .project-row-status:hover,
+  .dt .fi.project-row-status:hover {
+    border-color:var(--border);
+    background:var(--bg3);
+  }
+  .dt .project-row-status:focus,
+  .dt .fi.project-row-status:focus {
+    border-color:var(--border2);
+    background:var(--bg2);
+  }
+
+  input[type=checkbox], input[type=radio] {
+    width:16px;
+    height:16px;
+    vertical-align:middle;
+    accent-color:var(--coral);
+    flex-shrink:0;
+  }
+
+  /* PILL */
+  .pl { display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.6875rem; font-weight:600; line-height:1.35; }
+  .pg-g { background:var(--green-bg); color:var(--green); }
+  .pg-r { background:var(--red-bg); color:var(--red); }
+  .pg-a { background:var(--amber-bg); color:var(--amber); }
+  .pg-b { background:var(--blue-bg); color:var(--blue); }
+  .pg-c { background:var(--coral-bg); color:var(--coral); }
+
+  /* FIN ROWS */
+  .fr { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.875rem; font-weight:400; }
+  .fr:last-child { border-bottom:none; }
+  .fr.tot { font-weight:600; color:var(--text); font-size:0.9375rem; padding-top:12px; border-top:1px solid var(--border2); border-bottom:none; }
+  .fr.hdr { font-size:0.6875rem; font-weight:500; text-transform:none; letter-spacing:0.02em; color:var(--text3); padding-top:14px; border-bottom:none; }
+  .fr .lbl { color:var(--text2); }
+  .fr .val { color:var(--text); font-variant-numeric:tabular-nums; }
+  .fr .val.neg { color:var(--red); }
+  .fr .val.pos { color:var(--green); }
+
+  /* PROGRESS */
+  .pb { height:5px; background:var(--bg3); border-radius:3px; overflow:hidden; margin-top:4px; }
+  .pf { height:100%; border-radius:3px; transition:width .4s; }
+
+  /* FORM */
+  .fg { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .fgp { display:flex; flex-direction:column; gap:5px; }
+  .fl { font-size:0.75rem; color:var(--text3); font-weight:500; }
+  .fi { background-color:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.875rem; outline:none; transition:border-color .15s,background-color .15s,box-shadow .15s; width:100%; }
+  .fi:focus { border-color:var(--coral); background-color:var(--bg2); box-shadow:0 0 0 3px var(--coral-bg); }
+  /* WebKit/Safari: draw selects like other browsers (flat field + chevron, not Aqua control) */
+  select.fi {
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px;
+    padding-right: 34px;
+  }
+  .fst { font-size:0.875rem; font-weight:600; color:var(--text); margin-bottom:14px; margin-top:4px; }
+
+  /* MODAL */
+  .mo { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:100; align-items:center; justify-content:center; }
+  .mo.on { display:flex; }
+  .md { background:var(--bg2); border:1px solid var(--border); border-radius:var(--rl); padding:28px; width:520px; max-width:95vw; max-height:88vh; overflow-y:auto; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .mt { font-size:1.125rem; font-weight:600; margin-bottom:20px; letter-spacing:-0.02em; line-height:1.25; }
+  .mf { display:flex; gap:8px; justify-content:flex-end; margin-top:22px; padding-top:18px; border-top:1px solid var(--border); }
+
+  /* Stub / coming-soon popup */
+  .mo.stub-pop { z-index: 120; }
+  .stub-pop .md { width: 400px; padding: 24px 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .stub-pop .mt { margin-bottom: 10px; font-size: 1.0625rem; }
+  .stub-pop .stub-body { font-size: 0.875rem; color: var(--text2); line-height: 1.55; margin-bottom: 20px; }
+
+  #dash-period-select { border-radius: 6px; }
+  .hr > select.fi,
+  #customers-search { border-radius: 6px; }
+
+  .sh .btn { font-size: 0.75rem; padding: 5px 10px; border-radius: 6px; font-weight: 500; }
+
+  .dt .project-row-status,
+  .dt select.project-row-status { width: 100%; max-width: 200px; box-sizing: border-box; }
+
+  /* Internal-only mode: visibility toggles (PUBLIC_MODE uses defaults below). Do not delete rules. */
+  .ui-internal-facing { display: none; }
+  body.internal-mode .ui-public-facing { display: none !important; }
+  body.internal-mode .ui-internal-facing { display: block !important; }
+  body.internal-mode .nav-public-facing { display: none !important; }
+
+  /* Auth gate: app hidden until authenticated (fill viewport so flex centering is visible) */
+  #auth-loading {
+    display: flex;
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    min-height: 100vh;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    font-size: 14px;
+    color: var(--text2);
+  }
+  #auth-loading .auth-loading-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #auth-loading .auth-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transform: translateY(1px);
+  }
+  #auth-loading .auth-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.25;
+    animation: authDotPulse 1.1s infinite ease-in-out;
+  }
+  #auth-loading .auth-dot:nth-child(2) { animation-delay: 0.16s; }
+  #auth-loading .auth-dot:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes authDotPulse {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.95); }
+    40% { opacity: 0.95; transform: scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #auth-loading .auth-dot { animation: none; opacity: 0.6; transform: none; }
+  }
+  #auth-login-shell {
+    display:none;
+    flex:1;
+    width:100%;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding:40px 20px;
+    box-sizing:border-box;
+    --coral:#e8501a;
+    --coral2:#d14816;
+    --coral-bg:rgba(232,80,26,0.08);
+    --coral-border-soft:rgba(232,80,26,0.14);
+    --coral-border-mid:rgba(232,80,26,0.18);
+    --coral-border-strong:rgba(232,80,26,0.2);
+    --coral-border-focus:rgba(232,80,26,0.35);
+  }
+  #auth-login-shell .gate-card {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:32px 40px;
+    max-width:520px;
+    width:100%;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);
+  }
+  #app-shell {
+    display:none;
+    flex:1;
+    min-height:0;
+    min-width:0;
+    width:100%;
+    flex-direction:row;
+    align-items:stretch;
+  }
+  #app-shell.on {
+    display:flex !important;
+  }
+
+  /* Mobile layout */
+  @media (max-width: 960px) {
+    body { flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+
+    .insights-alerts-row { grid-template-columns: 1fr; }
+
+    #app-shell {
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* Top bar + full-width content (sidebar is off-canvas) */
+    .mobile-topbar {
+      display: flex !important;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      padding: 10px 12px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      z-index: 160;
+    }
+    .mobile-topbar-title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mobile-menu-btn {
+      flex-shrink: 0;
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--bg3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mobile-menu-btn span {
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--text);
+      border-radius: 1px;
+      box-shadow: 0 -6px 0 var(--text), 0 6px 0 var(--text);
+    }
+
+    .mobile-nav-overlay {
+      display: block !important;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 140;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    body.mobile-nav-open .mobile-nav-overlay {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    body.mobile-nav-open {
+      overflow: hidden;
+    }
+
+    .sb {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: min(288px, 88vw);
+      max-height: 100dvh;
+      z-index: 200;
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+      box-shadow: none;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    body.mobile-nav-open .sb {
+      transform: translateX(0);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    .main {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 76px;
+    }
+
+    #app-shell.on ~ .mobile-actions {
+      display: flex !important;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 45;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      background: rgba(255, 255, 255, 0.94);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      justify-content: center;
+    }
+    #app-shell.on ~ .mobile-actions .btn {
+      font-size: 12px;
+      padding: 7px 12px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .pg { padding: 24px 16px 20px; }
+    .ph { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .pg .pt { font-size: clamp(1.85rem, 6vw, 2.35rem); }
+    .hr { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+    .hr > * { flex-shrink: 0; max-width: 100%; }
+    .fi[style*="width:160px"],
+    .fi[style*="width:200px"] {
+      width: 100% !important;
+      max-width: 100%;
+    }
+    .kg { grid-template-columns: 1fr !important; }
+    .g2, .g3, .gm { grid-template-columns: 1fr; }
+    .cw { height: 200px; }
+    .card { padding: 18px 16px; }
+    .fg { grid-template-columns: 1fr; }
+    .md {
+      width: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+      max-height: 100dvh;
+      height: auto;
+      min-height: 0;
+      border-radius: 0;
+      padding: 20px 16px 16px;
+    }
+    .mt { font-size: 18px; margin-bottom: 16px; }
+    .mf {
+      position: sticky;
+      bottom: 0;
+      background: var(--bg2);
+      padding-top: 12px;
+      margin-top: 16px;
+    }
+    .dt {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      white-space: nowrap;
+    }
+    .spend-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+    .spend-toolbar-right { flex-wrap: wrap; justify-content: flex-start; }
+    .spend-kpi-row { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn,
+    .card,
+    .kc,
+    .ts-kpi,
+    .spend-kpi,
+    .spend-top-vendors-wrap,
+    .bva-row,
+    .motion-item,
+    .rollout-panel {
+      transition: none !important;
+      animation: none !important;
+      transform: none !important;
+    }
+    .motion-item {
+      opacity: 1 !important;
+    }
+  }
+
+  /* Spending report (Expenses) — uses global theme tokens only */
+  .spend-report-card { padding: 22px 22px 20px; }
+  .spend-bc { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 6px; }
+  .spend-title { font-size: clamp(1.85rem, 3.5vw, 2.35rem); font-weight: 700; letter-spacing: -0.035em; line-height: 1.08; color: var(--text); margin-bottom: 18px; }
+  .spend-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+  .spend-filter-q { max-width: 240px; flex: 1 1 160px; min-width: 0; }
+  .spend-toolbar-right { display: flex; align-items: flex-end; gap: 12px 14px; flex-wrap: wrap; justify-content: flex-end; }
+  .spend-dd { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .spend-dd-lbl { font-size: 11px; font-weight: 500; color: var(--text3); letter-spacing: 0.02em; }
+  .spend-dd .fi { width: auto; min-width: 118px; font-size: 13px; padding: 7px 10px; }
+  .spend-dd select.fi { padding: 7px 32px 7px 10px; background-position: right 10px center; }
+  .rev-trend-dd .fi { min-width: 132px; }
+  .spend-download { padding: 7px 10px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--text2); }
+  .spend-download:hover { color: var(--text); }
+  .spend-kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .spend-kpi { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rl); padding: 18px 20px; }
+  .spend-kpi-lbl { font-size: 12px; color: var(--text3); margin-bottom: 10px; line-height: 1.35; }
+  .spend-kpi-val { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; color: var(--text); font-variant-numeric: tabular-nums; }
+  .spend-kpi-cents { font-size: 0.55em; font-weight: 500; color: var(--text2); margin-left: 1px; }
+  .spend-kpi-brk { font-size: 12px; font-weight: 500; color: var(--text2); margin-top: 8px; line-height: 1.4; font-variant-numeric: tabular-nums; display: none; }
+  .power-toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 8px 0 12px; }
+  .power-toolbar .fi { min-width: 120px; }
+  .power-chip { font-size:11px; color:var(--text2); border:1px solid var(--border); border-radius:999px; padding:3px 8px; background:var(--bg2); }
+  .power-filters { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+  .power-filter-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .power-cols { display:none; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px; background:var(--bg2); }
+  .power-cols.on { display:block; }
+  .power-cols-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px 12px; }
+  .power-col-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+  .dt th.selcol, .dt td.selcol { width:34px; text-align:center; padding-left:10px; padding-right:10px; }
+  .kc .kpi-exp-split { font-size: 12px; font-weight: 500; color: var(--text2); margin-top: 6px; line-height: 1.35; font-variant-numeric: tabular-nums; min-height: 1.35em; }
+  .spend-chart-wrap { border: 1px solid var(--border); border-radius: var(--rl); background: var(--bg2); padding: 14px 16px 12px; }
+  .spend-chart-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .spend-chart-spacer { flex: 1; }
+  .spend-chart-toggles { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn.spend-ctype { font-size: 12px; padding: 5px 12px; font-weight: 500; color: var(--text2); border-color: var(--border); }
+  .btn.spend-ctype.on { color: var(--coral); border-color: var(--coral-border-focus); font-weight: 600; background: var(--coral-bg); }
+  .spend-pills-row { display: flex; align-items: flex-start; gap: 14px 20px; margin-bottom: 10px; flex-wrap: wrap; }
+  .spend-pills-lbl { font-size: 12px; font-weight: 500; color: var(--text3); padding-top: 6px; flex-shrink: 0; }
+  .spend-pills { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+  .spend-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 2px 8px; background: none; border: none; border-bottom: 2px solid transparent; font-family: inherit; font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; border-radius: 0; transition: color .15s; }
+  .spend-pill:hover { color: var(--text); }
+  .spend-pill.on { color: var(--coral); border-bottom-color: var(--coral); font-weight: 600; }
+  .spend-pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .spend-cw { position: relative; width: 100%; height: 300px; }
+  .spend-cw canvas { max-height: 300px; max-width: 100%; }
+
+  /* Top vendors by spend (Expenses insights) */
+  .spend-top-vendors-wrap { margin-bottom: 20px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--rl); background: var(--bg2); }
+  .spend-top-vendors-hdr { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .spend-top-vendors-summary { font-size: 14px; line-height: 1.55; color: var(--text2); margin: 0 0 14px; }
+  .spend-top-vendors-summary strong { color: var(--text); font-weight: 600; }
+  .spend-top-vendors-empty { font-size: 13px; color: var(--text3); margin: 0; }
+  .spend-tv-row { display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 10px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .spend-tv-row:last-of-type { border-bottom: none; padding-bottom: 2px; }
+  .spend-tv-rank { color: var(--text3); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .spend-tv-name { color: var(--text); font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spend-tv-amt { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .spend-tv-pct { color: var(--text3); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 3em; text-align: right; }
+  .spend-tv-bar { grid-column: 1 / -1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-top: -2px; }
+  .spend-tv-bar-fill { height: 100%; border-radius: 2px; background: var(--coral); opacity: 0.85; transition: width .35s ease; }
+
+  /* Timesheet */
+  .ts-grid { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:12px; }
+  .ts-kpi { padding:14px 16px; border:1px solid var(--border); border-radius:var(--rl); background:var(--bg2); }
+  .ts-kpi-lbl { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; }
+  .ts-kpi-val { font-size:24px; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+  .ts-kpi-sub { font-size:12px; color:var(--text2); margin-top:4px; }
+  .ts-weekdays { display:flex; flex-wrap:wrap; gap:10px 12px; }
+  .ts-weekday { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+  .ts-radio { display:inline-flex; align-items:center; gap:12px; font-size:13px; color:var(--text2); margin-top:4px; }
+  .ts-row-actions { white-space:nowrap; }
+  .ts-week-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 42px;
+    padding: 3px 6px 3px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--rl);
+    background: var(--bg2);
+    box-shadow: 0 1px 0 var(--border);
+  }
+  .ts-week-nav-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: var(--r);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ts-week-nav-btn:hover { background: var(--bg3); color: var(--text); }
+  .ts-week-nav-mid {
+    min-width: 0;
+    padding: 0 8px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .ts-week-nav-range {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .ts-week-nav-today {
+    border: none;
+    background: none;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--coral);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ts-week-nav-today:hover { color: var(--coral2); }
+  .ts-week-nav-today[hidden] { display: none !important; }
+  .ts-timesheet-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 12px;
+  }
+  .ts-period-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px 12px;
+    flex-wrap: wrap;
+    margin: -8px 0 14px;
+  }
+  .ts-period-dd { min-width: 0; }
+  .ts-period-dd .fi {
+    min-width: 128px;
+    min-height: 42px;
+  }
+  .ts-period-all-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--rl);
+    background: var(--bg2);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+  }
+  @media (max-width: 960px) {
+    .ts-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* Budget vs. Actual */
+  .bva-card { padding: 20px 22px 18px; }
+  .bva-row { display: grid; grid-template-columns: 160px 1fr 1fr; align-items: center; gap: 10px 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .bva-row:last-child { border-bottom: none; padding-bottom: 4px; }
+  .bva-total { border-top: 1px solid var(--border2); padding-top: 12px; font-weight: 600; }
+  .bva-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text); flex-wrap: wrap; gap: 6px; }
+  .bva-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .bva-nums { display: flex; align-items: baseline; gap: 4px; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bva-actual { font-weight: 600; color: var(--text); }
+  .bva-sep { color: var(--text3); font-size: 11px; }
+  .bva-budget { color: var(--text2); }
+  .bva-bar-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .bva-remaining { font-size: 12px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  @media (max-width: 960px) {
+    .bva-row { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+    .bva-bar-wrap { grid-column: 1 / -1; }
+    .spend-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+    .spend-toolbar-right { flex-wrap: wrap; justify-content: flex-start; }
+    .spend-kpi-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="auth-loading">
+  <span class="auth-loading-inner">
+    <span>Verifying session</span>
+    <span class="auth-dots" aria-hidden="true">
+      <span class="auth-dot"></span>
+      <span class="auth-dot"></span>
+      <span class="auth-dot"></span>
+    </span>
+  </span>
+</div>
+<div id="auth-login-shell">
+  <div class="gate-card">
+    <div class="pt" style="margin-bottom:8px;">Sign in</div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;">Sign in to use the dashboard.</p>
+    <div class="fg" style="grid-template-columns:1fr;gap:10px;margin-bottom:12px;">
+      <div class="fgp"><label class="fl">Email</label><input class="fi" id="gate-email" type="email" autocomplete="email" placeholder="you@company.com" /></div>
+      <div class="fgp"><label class="fl">Password</label><input class="fi" id="gate-password" type="password" autocomplete="current-password" placeholder="••••••••" /></div>
+      <div class="fgp" id="gate-confirm-wrap" style="display:none;"><label class="fl">Confirm password</label><input class="fi" id="gate-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••" /></div>
+    </div>
+    <div id="gate-auth-error" style="font-size:13px;color:var(--red);margin-bottom:12px;min-height:1.2em;"></div>
+    <div id="gate-invite-hint" style="display:none;font-size:13px;color:var(--text2);line-height:1.45;margin:-4px 0 12px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <button type="button" class="btn btn-p" id="gate-signin">Sign in</button>
+      <button type="button" class="btn" id="gate-signup">Sign up</button>
+    </div>
+    <button type="button" class="btn" id="gate-forgot-password" style="width:100%;margin-bottom:10px;">Forgot password?</button>
+    <button type="button" class="btn" id="gate-github" style="width:100%;">Continue with GitHub</button>
+    <button type="button" class="btn" id="gate-view-demo" style="width:100%;margin-top:10px;">View Demo</button>
+  </div>
+</div>
+
+<div id="app-shell">
+<div id="app-invite-flash" style="display:none;margin:0;padding:10px 14px;font-size:13px;line-height:1.45;color:var(--text);background:var(--bg3);border-bottom:1px solid var(--border);"></div>
+<div class="mobile-topbar">
+  <button type="button" id="btn-mobile-menu" class="mobile-menu-btn" aria-label="Open navigation" onclick="document.body.classList.toggle('mobile-nav-open')"><span></span></button>
+  <div class="mobile-topbar-title" id="mobile-title">Business Performance</div>
+</div>
+<div class="mobile-nav-overlay" id="mobile-nav-overlay" onclick="document.body.classList.remove('mobile-nav-open')"></div>
+<div class="sb">
+    <div class="sb-logo">
+    <img class="sb-brand-img" id="sb-brand-img" src="/idm-logo.png?v=transparent-1" width="400" height="123" alt="ives deutschmann management" loading="eager" decoding="async" />
+  </div>
+  <nav class="sb-nav">
+    <div class="nav-lbl">Overview</div>
+    <div class="ni active" data-nav="dashboard" onclick="nav('dashboard',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>Dashboard
+    </div>
+    <div class="ni" data-nav="customers" onclick="nav('customers',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>Customers
+    </div>
+    <div class="ni" data-nav="revenue" onclick="nav('revenue',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Income
+    </div>
+    <div class="ni" data-nav="expenses" onclick="nav('expenses',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>Expenses
+    </div>
+    <div class="ni" data-nav="timesheet" onclick="nav('timesheet',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>Timesheet
+    </div>
+    <div class="nav-lbl">Analytics</div>
+    <div class="ni" data-nav="performance" onclick="nav('performance',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>Performance
+    </div>
+    <div class="ni" data-nav="retention" onclick="nav('retention',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>Retention
+    </div>
+    <div class="ni" data-nav="insights" onclick="nav('insights',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>Insights
+    </div>
+    <!-- Hidden in internal-mode via .nav-public-facing (route/page kept). -->
+    <div class="ni nav-public-facing" data-nav="marketing" onclick="nav('marketing',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>Marketing
+    </div>
+    <div class="ni" data-nav="chat" onclick="nav('chat',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></svg>Advisor
+    </div>
+    <div class="sb-spacer"></div>
+    <div class="sb-div"></div>
+    <div class="ni" data-nav="team" onclick="nav('team',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Your team
+    </div>
+    <div class="ni" data-nav="settings" onclick="nav('settings',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Settings
+    </div>
+  </nav>
+  <div class="sb-user" id="sb-user-menu" title="Account" data-public-title="Account">
+    <div class="avatar" id="user-avatar">?</div>
+    <div style="min-width:0;flex:1;">
+      <div id="user-name" class="sb-user-name">—</div>
+      <div id="user-role" class="sb-user-role">—</div>
+      <button type="button" class="btn" id="btn-open-workspaces" style="margin-top:8px;width:100%;font-size:11px;padding:6px 8px;">Workspaces</button>
+    </div>
+  </div>
+</div>
+
+<div class="main mobile-main-offset">
+
+  <!-- DASHBOARD -->
+  <div class="pg on" id="page-dashboard">
+    <div class="ph">
+      <div><div class="pt">Business Performance</div><div class="ps" id="dash-subtitle">—</div><div class="ps" id="dash-brand-tagline" style="display:none;font-size:12px;color:var(--text3);margin-top:4px;max-width:42rem;line-height:1.4;"></div></div>
+      <div class="hr">
+        <select class="fi" id="dash-period-select" style="width:160px;" title="Reporting period">
+          <option value="all">All-Time</option>
+        </select>
+        <button type="button" class="btn" id="btn-open-transaction">+ Add transaction</button>
+        <button type="button" class="btn btn-p" id="btn-open-input">Update totals</button>
+      </div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <div style="padding:2px 2px 0;">
+          <div class="st" id="crm-welcome">Good day</div>
+          <div class="ss" id="crm-local-date">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="kg kg-dash">
+      <div class="kc"><div class="kl">Total Revenue</div><div class="kv" id="kpi-rev">$0</div><div class="kb bn" id="kpi-rev-badge">—</div></div>
+      <div class="kc hi"><div class="kl">MRR</div><div class="kv" id="kpi-gm">$0</div><div class="kb bn" id="kpi-gm-badge">—</div><div class="kf">Monthly recurring revenue (retainers)</div></div>
+      <div class="kc"><div class="kl">Net Profit</div><div class="kv" id="kpi-pft">$0</div><div class="kb bn" id="kpi-pft-badge">—</div></div>
+      <div class="kc"><div class="kl">Total Expenses</div><div class="kv" id="kpi-exp">$0</div><div class="kpi-exp-split" id="kpi-exp-split"></div><div class="kb bn" id="kpi-exp-badge">—</div></div>
+      <div class="kc"><div class="kl">Outstanding AR</div><div class="kv" id="kpi-ar">$0</div><div class="kb bn" id="kpi-ar-badge">—</div></div>
+    </div>
+    <div class="gm">
+      <div class="card">
+        <div class="sh"><div class="st">Revenue vs Expenses</div><div class="ss">Current period</div></div>
+        <div class="cw"><canvas id="cRevExp"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="sh"><div class="st">Expense Breakdown</div></div>
+        <div class="cw" style="height:175px;"><canvas id="cExp"></canvas></div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px;" id="exp-leg"></div>
+      </div>
+    </div>
+    <div class="card mb" style="margin-top:12px;">
+      <div class="sh" style="align-items:flex-start;gap:14px;">
+        <div><div class="st">Personable CRM</div><div class="ss">Suggestions, milestones, and quick weekly recaps</div></div>
+        <div class="hr">
+          <button type="button" class="btn" id="btn-generate-monday">Generate Monday summary</button>
+          <button type="button" class="btn" id="btn-generate-friday">Generate Friday recap</button>
+        </div>
+      </div>
+      <div class="g2" style="margin-top:12px;grid-template-columns:1.3fr 1fr;">
+        <div>
+          <div class="st" style="font-size:13px;margin-bottom:8px;">Follow-up suggestions</div>
+          <div id="crm-suggestions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+        <div>
+          <div class="st" style="font-size:13px;margin-bottom:8px;">Milestones</div>
+          <div id="crm-milestones-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <div class="st" style="font-size:13px;margin-bottom:8px;">Latest summary</div>
+        <div id="crm-latest-summary" style="font-size:13px;color:var(--text2);">No summary generated yet.</div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="sh"><div class="st">Accounts Receivable</div><button type="button" class="btn" onclick="nav('revenue')">View all →</button></div>
+        <div id="dash-ar-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No receivables yet.</div>
+        <table class="dt" id="dash-ar-table" style="display:none;">
+          <thead><tr><th>Client</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody id="dash-ar-body"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="sh"><div class="st">Income statement</div><div class="ss" id="income-statement-hint"></div></div>
+        <div id="dashboard-ops-statement" style="display:none;">
+          <div class="fr hdr"><span>Income (by category)</span></div>
+          <div id="dashboard-revenue-lines"></div>
+          <div class="fr tot"><span>Gross revenue</span><span class="val pos" id="f-gro">$0</span></div>
+          <div class="fr"><span class="lbl">Less: Labor (cost of delivery)</span><span class="val neg" id="f-cogs-lab">−$0</span></div>
+          <div class="fr tot"><span>Gross profit</span><span class="val pos" id="f-gp">$0</span></div>
+          <div class="fr"><span class="lbl">Gross margin</span><span class="val" id="f-gmpct">—</span></div>
+          <div class="fr hdr"><span>Operating expenses</span></div>
+          <div id="dashboard-expense-lines"></div>
+          <div class="fr tot"><span>Net profit</span><span class="val pos" id="f-net">$0</span></div>
+        </div>
+        <div id="dashboard-legacy-statement">
+          <div class="fr hdr"><span>Revenue (manual buckets)</span></div>
+          <div class="fr"><span class="lbl">Services</span><span class="val" id="f-svc">$0</span></div>
+          <div class="fr"><span class="lbl">Retainers</span><span class="val" id="f-ret">$0</span></div>
+          <div class="fr tot"><span>Gross revenue</span><span class="val pos" id="f-gro-legacy">$0</span></div>
+          <div class="fr hdr"><span>Expenses (manual buckets)</span></div>
+          <div class="fr"><span class="lbl">Labor</span><span class="val neg" id="f-lab">−$0</span></div>
+          <div class="fr"><span class="lbl">Software & Tools</span><span class="val neg" id="f-sw">−$0</span></div>
+          <div class="fr"><span class="lbl">Advertising</span><span class="val neg" id="f-ads">−$0</span></div>
+          <div class="fr"><span class="lbl">Other</span><span class="val neg" id="f-oth">−$0</span></div>
+          <div class="fr tot"><span>Net profit</span><span class="val pos" id="f-net-legacy">$0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card mb" style="margin-bottom:14px;">
+      <div class="sh">
+        <div>
+          <div class="st">Transaction log</div>
+          <div class="ss">Add entries one at a time; amounts roll into the totals and charts above</div>
+        </div>
+        <div class="hr" style="flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn btn-p" id="btn-open-transaction-2">+ Add transaction</button>
+          <button type="button" class="btn" id="btn-csv-import-open">Import CSV</button>
+          <button type="button" class="btn" id="btn-journal-export-open">Export journal CSV</button>
+          <button type="button" class="btn" id="btn-undo-last-import" disabled title="Remove the last CSV import from this workspace">Undo last import</button>
+        </div>
+      </div>
+      <div id="transaction-log-empty" style="font-size:13px;color:var(--text3);padding:4px 0 8px;">No transactions yet. Use “Add transaction” to record income or expenses.</div>
+      <table class="dt" id="transaction-log-table" style="display:none;">
+        <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th style="width:88px;"></th></tr></thead>
+        <tbody id="transaction-log-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div class="pg" id="page-customers">
+    <div class="ph"><div><div class="pt">Customers</div><div class="ps">Active clients and pipeline. Allocated cost reflects tagged expenses; untagged costs stay firm-wide.</div></div><div class="hr"><input class="fi" id="customers-search" placeholder="Search clients..." style="width:200px;" title="Search" /><div class="customers-columns-wrap"><button type="button" class="btn" id="btn-customers-columns">Columns</button><div id="customers-columns-panel" aria-label="Choose visible customer columns"></div></div><button type="button" class="btn btn-p" id="btn-add-client">+ Add Client</button></div></div>
+    <div class="kg" style="grid-template-columns:repeat(3,1fr);">
+      <div class="kc"><div class="kl">Total Clients</div><div class="kv" id="cust-kpi-1">0</div><div class="kb bn" id="cust-kpi-1b">—</div></div>
+      <div class="kc hi"><div class="kl">Active Retainers</div><div class="kv" id="cust-kpi-2">0</div><div class="kb bn" id="cust-kpi-2b">—</div></div>
+      <div class="kc"><div class="kl">Avg. revenue / client</div><div class="kv" id="cust-kpi-3">$0</div><div class="kb bn" id="cust-kpi-3b">—</div></div>
+    </div>
+    <div class="card">
+      <div id="customers-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No customers yet.</div>
+      <table class="dt" id="customers-table" style="display:none;">
+        <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Preferred</th><th>Style</th><th>Status</th><th>Projects</th><th>Revenue</th><th>Allocated cost</th><th>Profit</th><th>Margin</th><th>ROI</th><th style="width:140px;">Actions</th></tr></thead>
+        <tbody id="customers-tbody"></tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <div class="sh"><div class="st">Relationship timeline</div><div class="ss">Recent outreach and reminders</div></div>
+      <div id="crm-reminders-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+      <div id="crm-events-timeline" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div>
+
+  <!-- INCOME (revenue records) -->
+  <div class="pg" id="page-revenue">
+    <div class="ph"><div><div class="pt">Income</div><div class="ps">Recorded income syncs to this workspace and drives dashboard totals</div></div><button type="button" class="btn btn-p" id="btn-add-income">+ Add income</button></div>
+    <div class="kg">
+      <div class="kc hi"><div class="kl">Collected This Month</div><div class="kv" id="rev-kpi-1">$0</div><div class="kb bn" id="rev-kpi-1b">—</div></div>
+      <div class="kc"><div class="kl">Outstanding</div><div class="kv" id="rev-kpi-2">$0</div><div class="kb bn" id="rev-kpi-2b">—</div></div>
+      <div class="kc"><div class="kl">Invoices Sent</div><div class="kv" id="rev-kpi-3">0</div><div class="kb bn" id="rev-kpi-3b">—</div></div>
+      <div class="kc"><div class="kl">Avg. Days to Pay</div><div class="kv" id="rev-kpi-4">—</div><div class="kb bn" id="rev-kpi-4b">—</div></div>
+    </div>
+    <div class="gm mb">
+      <div class="card">
+        <div class="sh">
+          <div><div class="st">Revenue Trend</div><div class="ss" id="rev-trend-hint">Last 90 days</div></div>
+          <div class="spend-dd rev-trend-dd">
+            <span class="spend-dd-lbl">Date range</span>
+            <select class="fi" id="rev-trend-range" title="Revenue trend range">
+              <option value="30d">Past month</option>
+              <option value="90d" selected>Last 90 days</option>
+              <option value="ytd">YTD</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
+        </div>
+        <div class="cw"><canvas id="cRevT"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="sh"><div class="st">AR Aging</div></div>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px;">
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px;"><span>Current (0–30 days)</span><span id="ar-current-amt" style="color:var(--green);">$0</span></div><div class="pb"><div class="pf" id="ar-current-bar" style="width:0%;background:var(--green);"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px;"><span>31–60 days</span><span id="ar-31-60-amt" style="color:var(--amber);">$0</span></div><div class="pb"><div class="pf" id="ar-31-60-bar" style="width:0%;background:var(--amber);"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px;"><span>61–90 days</span><span id="ar-61-90-amt" style="color:var(--red);">$0</span></div><div class="pb"><div class="pf" id="ar-61-90-bar" style="width:0%;background:var(--red);"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px;"><span>90+ days</span><span id="ar-90-plus-amt" style="color:var(--red);">$0</span></div><div class="pb"><div class="pf" id="ar-90-plus-bar" style="width:0%;background:var(--red);"></div></div></div>
+        </div>
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;font-weight:600;">
+          <span>Total Outstanding</span><span id="ar-total-outstanding" style="color:var(--text2);">$0</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sh"><div class="st">Income entries</div></div>
+      <div class="power-toolbar">
+        <input type="search" class="fi" id="income-power-search" placeholder="Search source, client, project, invoice..." autocomplete="off" />
+        <button type="button" class="btn" id="income-power-add-filter">+ Filter rule</button>
+        <button type="button" class="btn" id="income-power-columns">Columns</button>
+        <select class="fi" id="income-power-bulk-action" title="Bulk action">
+          <option value="">Bulk action...</option>
+          <option value="category:svc">Set category: Services</option>
+          <option value="category:ret">Set category: Retainer</option>
+          <option value="invoice:paid">Mark invoice paid</option>
+          <option value="invoice:sent">Mark invoice sent</option>
+          <option value="export:selected">Export selected CSV</option>
+          <option value="delete:selected">Delete selected</option>
+        </select>
+        <button type="button" class="btn btn-p" id="income-power-apply-bulk">Apply</button>
+        <button type="button" class="btn" id="income-power-export-all">Export filtered CSV</button>
+        <span class="power-chip" id="income-power-meta">0 rows</span>
+      </div>
+      <div id="income-power-columns-panel" class="power-cols">
+        <div class="power-cols-grid" id="income-power-columns-grid"></div>
+      </div>
+      <div id="income-power-filters" class="power-filters"></div>
+      <div id="income-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No income recorded yet.</div>
+      <table class="dt" id="income-table" style="display:none;">
+        <thead id="income-thead"></thead>
+        <tbody id="income-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EXPENSES -->
+  <div class="pg" id="page-expenses">
+    <div class="ph"><div><div class="pt">Expenses</div><div class="ps">Track costs; totals roll into the dashboard when you use operational records</div></div><button type="button" class="btn btn-p" id="btn-add-expense">+ Add expense</button></div>
+
+    <div class="card spend-report-card mb">
+      <div class="spend-report-hdr">
+        <div class="spend-bc">Insights</div>
+        <div class="spend-title">Spending</div>
+      </div>
+      <div class="spend-toolbar">
+        <input type="search" class="fi spend-filter-q" id="spend-filter-q" placeholder="Filter by…" autocomplete="off" title="Filter by title, vendor, or notes" />
+        <div class="spend-toolbar-right">
+          <div class="spend-dd">
+            <span class="spend-dd-lbl">Slice</span>
+            <select class="fi spend-slice" id="spend-slice" title="Slice dimension">
+              <option value="category">Category</option>
+              <option value="vendor">Vendor</option>
+              <option value="client">Client</option>
+            </select>
+          </div>
+          <div class="spend-dd">
+            <span class="spend-dd-lbl">Date range</span>
+            <select class="fi spend-range" id="spend-range" title="Date range">
+              <option value="month">This month</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d" selected>Last 90 days</option>
+              <option value="ytd">Year to date</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
+          <div class="spend-dd">
+            <span class="spend-dd-lbl">Interval</span>
+            <select class="fi spend-interval" id="spend-interval" title="Chart interval">
+              <option value="daily">Daily</option>
+              <option value="weekly" selected>Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="spend-dd">
+            <span class="spend-dd-lbl">Cost type</span>
+            <select class="fi spend-cost-type" id="spend-cost-type" title="Fixed recurring vs one-time">
+              <option value="all" selected>All (stacked)</option>
+              <option value="fixed">Fixed recurring</option>
+              <option value="variable">One-time</option>
+            </select>
+          </div>
+          <button type="button" class="btn spend-download" id="spend-download" title="Download CSV" aria-label="Download CSV">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="spend-kpi-row">
+        <div class="spend-kpi">
+          <div class="spend-kpi-lbl" id="spend-kpi-primary-lbl">Period spend</div>
+          <div class="spend-kpi-val" id="spend-kpi-primary-val"><span class="spend-kpi-dollars">$0</span></div>
+          <div class="spend-kpi-brk" id="spend-kpi-primary-brk" aria-hidden="true"></div>
+        </div>
+        <div class="spend-kpi">
+          <div class="spend-kpi-lbl" id="spend-kpi-secondary-lbl">Prior period</div>
+          <div class="spend-kpi-val" id="spend-kpi-secondary-val"><span class="spend-kpi-dollars">$0</span></div>
+          <div class="spend-kpi-brk" id="spend-kpi-secondary-brk" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="spend-top-vendors-wrap" id="spend-top-vendors-wrap">
+        <div class="spend-top-vendors-hdr">Top vendors by spend</div>
+        <p class="spend-top-vendors-summary" id="spend-top-vendors-summary" aria-live="polite"></p>
+        <div id="spend-top-vendors-list"></div>
+      </div>
+      <div class="spend-chart-wrap">
+        <div class="spend-chart-top">
+          <span class="spend-chart-spacer"></span>
+          <div class="spend-chart-toggles" role="group" aria-label="Chart type">
+            <button type="button" class="btn spend-ctype on" id="spend-chart-line" data-ctype="line">Line</button>
+            <button type="button" class="btn spend-ctype" id="spend-chart-bar" data-ctype="bar">Bar</button>
+          </div>
+        </div>
+        <div class="spend-pills-row">
+          <span class="spend-pills-lbl" id="spend-pills-lbl">Category</span>
+          <div class="spend-pills" id="spend-pills"></div>
+        </div>
+        <div class="spend-cw"><canvas id="cSpendTrend"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card bva-card mb">
+      <div class="sh">
+        <div>
+          <div class="st">Budget vs. Actual</div>
+          <div class="ss" id="bva-month-label">This month</div>
+        </div>
+        <a href="#" class="btn" style="font-size:11px;padding:4px 12px;" onclick="window.nav('settings');return false;">Set budgets →</a>
+      </div>
+      <div id="budget-vs-actual">
+        <div style="font-size:13px;color:var(--text3);padding:4px 0;">Loading…</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="expenses-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No expenses yet.</div>
+      <table class="dt" id="expenses-table" style="display:none;">
+        <thead><tr><th>Date</th><th>Title</th><th>Category</th><th>Amount</th><th>Vendor</th><th>Client</th><th>Recurring</th><th style="width:140px;">Actions</th></tr></thead>
+        <tbody id="expenses-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TIMESHEET -->
+  <div class="pg" id="page-timesheet">
+    <div class="ph">
+      <div>
+        <div class="pt">Timesheet</div>
+        <div class="ps">Hours logged per employee account. Add entries manually and track billable utilization.</div>
+      </div>
+      <div class="hr">
+        <button type="button" class="btn btn-p" id="btn-add-time">+ Add Time</button>
+      </div>
+    </div>
+    <div class="ts-period-toolbar">
+      <div class="ts-timesheet-toolbar">
+        <div class="spend-dd ts-period-dd">
+          <span class="spend-dd-lbl">View</span>
+          <select class="fi" id="ts-period-mode" title="Time period" aria-label="Time period">
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="quarter">Quarter</option>
+            <option value="ytd">YTD</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div id="ts-period-week-wrap" class="ts-week-nav" role="group" aria-label="Timesheet week">
+          <button type="button" class="ts-week-nav-btn" id="ts-week-prev" title="Previous week" aria-label="Previous week">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="ts-week-nav-mid">
+            <div class="ts-week-nav-range" id="ts-week-label">—</div>
+            <button type="button" class="ts-week-nav-today" id="ts-week-today" hidden>This week</button>
+          </div>
+          <button type="button" class="ts-week-nav-btn" id="ts-week-next" title="Next week" aria-label="Next week">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div id="ts-period-month-wrap" class="ts-week-nav" role="group" aria-label="Timesheet month" style="display:none;">
+          <button type="button" class="ts-week-nav-btn" id="ts-month-prev" title="Previous month" aria-label="Previous month">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="ts-week-nav-mid">
+            <div class="ts-week-nav-range" id="ts-month-label">—</div>
+            <button type="button" class="ts-week-nav-today" id="ts-month-today" hidden>This month</button>
+          </div>
+          <button type="button" class="ts-week-nav-btn" id="ts-month-next" title="Next month" aria-label="Next month">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div id="ts-period-quarter-wrap" class="ts-week-nav" role="group" aria-label="Timesheet quarter" style="display:none;">
+          <button type="button" class="ts-week-nav-btn" id="ts-quarter-prev" title="Previous quarter" aria-label="Previous quarter">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="ts-week-nav-mid">
+            <div class="ts-week-nav-range" id="ts-quarter-label">—</div>
+            <button type="button" class="ts-week-nav-today" id="ts-quarter-today" hidden>This quarter</button>
+          </div>
+          <button type="button" class="ts-week-nav-btn" id="ts-quarter-next" title="Next quarter" aria-label="Next quarter">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div id="ts-period-all-wrap" class="ts-period-all-pill" style="display:none;" aria-hidden="true">All recorded time</div>
+      </div>
+    </div>
+    <div class="ts-grid mb">
+      <div class="ts-kpi"><div class="ts-kpi-lbl">Total hours</div><div class="ts-kpi-val" id="ts-kpi-total">0.0h</div><div class="ts-kpi-sub" id="ts-kpi-total-sub">0 entries</div></div>
+      <div class="ts-kpi"><div class="ts-kpi-lbl">Billable</div><div class="ts-kpi-val" id="ts-kpi-billable">0.0h</div><div class="ts-kpi-sub" id="ts-kpi-billable-sub">0.0%</div></div>
+      <div class="ts-kpi"><div class="ts-kpi-lbl">Non-billable</div><div class="ts-kpi-val" id="ts-kpi-nonbillable">0.0h</div><div class="ts-kpi-sub" id="ts-kpi-nonbillable-sub">0.0%</div></div>
+      <div class="ts-kpi"><div class="ts-kpi-lbl">Employees</div><div class="ts-kpi-val" id="ts-kpi-employees">0</div><div class="ts-kpi-sub" id="ts-kpi-employees-sub">with logged time</div></div>
+      <div class="ts-kpi"><div class="ts-kpi-lbl">Avg / employee</div><div class="ts-kpi-val" id="ts-kpi-avg">0.0h</div><div class="ts-kpi-sub" id="ts-kpi-avg-sub">total period</div></div>
+    </div>
+    <div class="card mb">
+      <div class="sh"><div class="st">Hours by employee</div><div class="ss" id="ts-sub-by-emp">Based on the Account field · selected week</div></div>
+      <div id="timesheet-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No time logged yet.</div>
+      <table class="dt" id="timesheet-table" style="display:none;">
+        <thead><tr><th>Employee (Account)</th><th>Total</th><th>Billable</th><th>Non-Billable</th><th>Entries</th><th>Utilization</th></tr></thead>
+        <tbody id="timesheet-tbody"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="sh"><div class="st">Recent entries</div><div class="ss" id="ts-sub-log">Newest first · selected week</div></div>
+      <div id="timesheet-log-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No entries yet.</div>
+      <table class="dt" id="timesheet-log-table" style="display:none;">
+        <thead><tr><th>Date</th><th>Employee</th><th>Project</th><th>Task</th><th>Activity</th><th>Hours</th><th>Type</th><th>Notes</th><th style="width:110px;">Actions</th></tr></thead>
+        <tbody id="timesheet-log-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PERFORMANCE -->
+  <div class="pg" id="page-performance">
+    <div class="ph"><div><div class="pt">Projects</div><div class="ps">Delivery pipeline and client work</div></div><div class="hr"><button type="button" class="btn" id="btn-manage-statuses">Manage statuses</button><button type="button" class="btn btn-p" id="btn-add-project">+ Add project</button></div></div>
+    <div class="kg">
+      <div class="kc hi"><div class="kl">Projects Delivered</div><div class="kv" id="perf-kpi-1">0</div><div class="kb bn" id="perf-kpi-1b">—</div></div>
+      <div class="kc"><div class="kl">On-Time Rate</div><div class="kv" id="perf-kpi-2">—</div><div class="kb bn" id="perf-kpi-2b">—</div></div>
+      <div class="kc"><div class="kl">Avg. Duration</div><div class="kv" id="perf-kpi-3">—</div><div class="kb bn" id="perf-kpi-3b">—</div></div>
+      <div class="kc"><div class="kl">Client Satisfaction</div><div class="kv" id="perf-kpi-4">—</div><div class="kb bn" id="perf-kpi-4b">—</div></div>
+    </div>
+    <div class="g2 mb">
+      <div class="card"><div class="sh"><div class="st">Projects by Service Type</div></div><div class="cw"><canvas id="cSvc"></canvas></div></div>
+      <div class="card"><div class="sh"><div class="st">Monthly Deliverables</div></div><div class="cw"><canvas id="cDel"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="sh"><div class="st">Active Projects</div></div>
+      <div id="projects-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No projects yet.</div>
+      <table class="dt" id="projects-table" style="display:none;">
+        <thead><tr><th>Project</th><th>Client</th><th>Type</th><th>Description</th><th>Due</th><th>Value</th><th>Status</th><th style="min-width:120px;">Case study</th><th style="width:160px;">Actions</th></tr></thead>
+        <tbody id="projects-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RETENTION -->
+  <div class="pg" id="page-retention">
+    <div class="ph"><div><div class="pt">Retention</div><div class="ps">Churn, retainers, and lifetime value</div></div></div>
+    <div class="kg" style="grid-template-columns:repeat(3,1fr);">
+      <div class="kc hi"><div class="kl">Retention Rate</div><div class="kv" id="ret-kpi-1">—</div><div class="kb bn" id="ret-kpi-1b">—</div></div>
+      <div class="kc"><div class="kl">Avg. Client LTV</div><div class="kv" id="ret-kpi-2">$0</div><div class="kb bn" id="ret-kpi-2b">—</div></div>
+      <div class="kc"><div class="kl">Churned This Month</div><div class="kv" id="ret-kpi-3">0</div><div class="kb bn" id="ret-kpi-3b">—</div></div>
+    </div>
+    <div class="gm mb">
+      <div class="card"><div class="sh"><div class="st">Retention Trend</div></div><div class="cw"><canvas id="cRet"></canvas></div></div>
+      <div class="card">
+        <div class="sh"><div class="st">Retainer Clients</div></div>
+        <div id="retainers-empty" style="font-size:13px;color:var(--text3);padding:12px 0;">No retainer clients yet.</div>
+        <div id="retainers-list" style="display:none;flex-direction:column;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div class="pg" id="page-insights">
+    <div class="ph"><div><div class="pt">Insights</div><div class="ps" id="insights-sub">Auto-generated from your transactions, clients &amp; projects</div></div></div>
+
+    <!-- Alerts / flags -->
+    <div id="insights-alerts-wrap" class="insights-alerts-wrap">
+      <div id="insights-alerts-healthy"></div>
+      <div id="insights-alerts-row" class="insights-alerts-row">
+        <div>
+          <div class="insights-alerts-lbl">Revenue &amp; retention</div>
+          <div id="insights-alerts-revenue" class="insights-alerts-list"></div>
+        </div>
+        <div>
+          <div class="insights-alerts-lbl">Spending &amp; savings</div>
+          <div id="insights-alerts-spend" class="insights-alerts-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI row -->
+    <div class="kg" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px;">
+      <div class="kc hi"><div class="kl">Est. MRR</div><div class="kv" id="ins-mrr">$0</div><div class="kb bw" id="ins-mrr-b">from retainers</div></div>
+      <div class="kc"><div class="kl">Top Client Revenue</div><div class="kv" id="ins-top-client-rev">$0</div><div class="kb bn" id="ins-top-client-name">—</div></div>
+      <div class="kc"><div class="kl">Avg Monthly Revenue</div><div class="kv" id="ins-avg-monthly">$0</div><div class="kb bn" id="ins-avg-monthly-b">last 3 months</div></div>
+      <div class="kc"><div class="kl">Churn Risk Clients</div><div class="kv" id="ins-churn-count">0</div><div class="kb bn" id="ins-churn-b">no activity 60d+</div></div>
+    </div>
+
+    <!-- Revenue trend + Vertical breakdown -->
+    <div class="g2 mb">
+      <div class="card">
+        <div class="sh"><div class="st">Monthly Revenue Trend</div><div class="ss" id="ins-trend-badge">—</div></div>
+        <div class="cw" style="height:200px;"><canvas id="cInsTrend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="sh"><div class="st">Revenue by Vertical</div></div>
+        <div class="cw" style="height:200px;"><canvas id="cVert"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Expense breakdown + Forecast -->
+    <div class="g2 mb">
+      <div class="card">
+        <div class="sh"><div class="st">Top Expense Categories</div></div>
+        <div id="ins-expense-breakdown" style="display:flex;flex-direction:column;gap:8px;margin-top:4px;"></div>
+      </div>
+      <div class="card">
+        <div class="sh"><div class="st">Outlook</div><div class="ss">Revenue & expense trends · this month pace</div></div>
+        <div id="ins-forecast-body" style="margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <div class="card mb">
+      <div class="sh"><div class="st">Forecast accuracy</div><div class="ss">Linear trend vs what happened (completed months only)</div></div>
+      <div id="ins-forecast-accuracy" style="padding-top:4px;">
+        <p style="font-size:13px;color:var(--text3);margin:0;">Loading…</p>
+      </div>
+      <div id="ins-budget-accuracy" style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border);"></div>
+    </div>
+
+    <!-- Client performance table -->
+    <div class="card mb">
+      <div class="sh"><div class="st">Client Performance</div><div class="ss">all-time revenue from transactions</div></div>
+      <div id="ins-clients-empty" style="font-size:13px;color:var(--text3);padding:8px 0;display:none;">No client data yet.</div>
+      <table class="dt" id="ins-clients-table" style="display:none;">
+        <thead><tr><th>Client</th><th>Revenue</th><th>Projects</th><th>Retainer</th><th>Last Activity</th><th>Status</th></tr></thead>
+        <tbody id="ins-clients-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Churn risk list -->
+    <div class="card">
+      <div class="sh"><div class="st">Churn Risk</div><div class="ss">clients with no income in 60+ days</div></div>
+      <div id="ins-churn-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No churn risk detected.</div>
+      <div id="ins-churn-list" style="display:flex;flex-direction:column;gap:8px;margin-top:4px;"></div>
+    </div>
+  </div>
+
+  <!-- MARKETING (nav hidden in internal mode; route kept). -->
+  <div class="pg" id="page-marketing">
+    <div class="ui-public-facing">
+    <div class="ph"><div><div class="pt">Marketing</div><div class="ps">Campaigns, leads, and pipeline</div></div><button type="button" class="btn btn-p" id="btn-new-campaign">+ New Campaign</button></div>
+    <div class="kg" style="grid-template-columns:repeat(3,1fr);">
+      <div class="kc hi"><div class="kl">Leads This Month</div><div class="kv" id="mkt-kpi-1">0</div><div class="kb bn" id="mkt-kpi-1b">—</div></div>
+      <div class="kc"><div class="kl">Close Rate</div><div class="kv" id="mkt-kpi-2">—</div><div class="kb bn" id="mkt-kpi-2b">—</div></div>
+      <div class="kc"><div class="kl">Pipeline Value</div><div class="kv" id="mkt-kpi-3">$0</div><div class="kb bn" id="mkt-kpi-3b">—</div></div>
+    </div>
+    <div class="card" id="marketing-ga4-card" style="margin-bottom:16px;">
+      <div class="sh">
+        <div>
+          <div class="st">Website Analytics (GA4)</div>
+          <div class="ss">Last 7 days</div>
+        </div>
+      </div>
+      <div id="marketing-ga4-status" style="font-size:12px;color:var(--text3);margin-bottom:10px;">Loading analytics…</div>
+      <div class="kg" style="grid-template-columns:repeat(5,1fr);gap:10px;" id="marketing-ga4-kpis">
+        <div class="kc"><div class="kl">Users</div><div class="kv" id="ga4-users">—</div></div>
+        <div class="kc"><div class="kl">Sessions</div><div class="kv" id="ga4-sessions">—</div></div>
+        <div class="kc"><div class="kl">New Users</div><div class="kv" id="ga4-new-users">—</div></div>
+        <div class="kc"><div class="kl">Page Views</div><div class="kv" id="ga4-page-views">—</div></div>
+        <div class="kc"><div class="kl">Conversions</div><div class="kv" id="ga4-conversions">—</div></div>
+      </div>
+      <div id="marketing-ga4-channels" style="margin-top:10px;font-size:12px;color:var(--text2);"></div>
+    </div>
+    <div class="g2 mb">
+      <div class="card"><div class="sh"><div class="st">Lead Sources</div></div><div class="cw" style="height:200px;"><canvas id="cLead"></canvas></div></div>
+      <div class="card">
+        <div class="sh"><div class="st">Active Pipeline</div></div>
+        <div id="campaigns-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No campaigns yet. Use + New Campaign to add one.</div>
+        <div id="marketing-pipeline" style="display:none;flex-direction:column;gap:10px;"></div>
+      </div>
+    </div>
+    </div>
+    <div class="ui-internal-facing ph" style="margin-bottom:0;"><div><div class="pt">Marketing</div><div class="ps">Campaigns, leads, and pipeline</div></div></div>
+    <div class="ui-internal-facing card"><div style="font-size:13px;color:var(--text2);line-height:1.55;">No marketing data yet. Use Dashboard and Revenue for operational numbers.</div></div>
+  </div>
+
+  <!-- CHAT: single shell — transcript, composer, chips (ChatGPT-style workspace) -->
+  <div class="pg" id="page-chat">
+    <div class="chat-shell">
+      <header class="chat-shell-header">
+        <p class="chat-shell-title">Advisor</p>
+        <p class="chat-shell-sub">Your business copilot for this dashboard. Turn your numbers into clear next steps with focused recommendations and drafts.</p>
+        <p class="chat-shell-sub-mobile">Your business copilot. Get prioritized next steps from your dashboard data.</p>
+      </header>
+      <div class="chat-transcript">
+        <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+      </div>
+      <div class="chat-composer-stack">
+        <p class="chat-prompt-heading">Choose a task or type a request</p>
+        <div class="chat-prompt-box" id="chat-prompt-box" role="group" aria-label="Message composer">
+          <input type="file" id="chat-file-input" class="chat-file-input-hidden" accept="image/*" tabindex="-1" aria-hidden="true" />
+          <div id="chat-image-preview-wrap" class="chat-image-preview-wrap" hidden>
+            <button type="button" id="chat-image-thumb-btn" class="chat-image-thumb-btn" style="border:none;padding:0;background:none;" aria-label="View full image">
+              <img id="chat-image-thumb" src="" alt="Attached preview" />
+            </button>
+            <button type="button" class="chat-image-preview-remove" id="chat-image-remove" aria-label="Remove image">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <textarea id="chat-input" class="chat-prompt-ta" rows="1" placeholder="Describe the outcome you want (e.g. weekly recap)." maxlength="2000" autocomplete="off"></textarea>
+          <div class="chat-prompt-toolbar">
+            <button type="button" class="chat-prompt-icon-btn" id="chat-attach-btn" title="Attach image" aria-label="Attach image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            </button>
+            <div class="chat-tools-wrap">
+              <button type="button" class="chat-prompt-tools-trigger" id="chat-tools-trigger" aria-expanded="false" aria-haspopup="true" title="Explore tools">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
+                <span id="chat-tools-label">Tools</span>
+              </button>
+              <div id="chat-tools-pop" class="chat-tools-pop" hidden role="menu" aria-label="Tools">
+                <button type="button" class="chat-tool-row" data-chat-tool="createImage" role="menuitem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <span>Create an image</span>
+                </button>
+                <button type="button" class="chat-tool-row" data-chat-tool="searchWeb" role="menuitem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                  <span>Search the web</span>
+                </button>
+                <button type="button" class="chat-tool-row" data-chat-tool="writeCode" role="menuitem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                  <span>Write or code</span>
+                </button>
+                <button type="button" class="chat-tool-row" data-chat-tool="deepResearch" role="menuitem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+                  <span>Run deep research</span><span class="chat-tool-row-extra">N/A</span>
+                </button>
+                <button type="button" class="chat-tool-row" data-chat-tool="thinkLonger" role="menuitem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+                  <span>Think for longer</span>
+                </button>
+              </div>
+            </div>
+            <div class="chat-active-tool" id="chat-active-tool" hidden>
+              <span class="chat-active-tool-divider" aria-hidden="true"></span>
+              <button type="button" class="chat-active-tool-chip" id="chat-active-tool-clear" title="Clear tool">
+                <span id="chat-active-tool-icon"></span>
+                <span id="chat-active-tool-name"></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            <div class="chat-prompt-toolbar-spacer"></div>
+            <button type="button" class="chat-prompt-icon-btn" id="chat-mic-btn" title="Voice input isn’t available in this dashboard" aria-label="Voice input unavailable">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg>
+            </button>
+            <button type="button" class="chat-prompt-send" id="chat-send" disabled title="Send" aria-label="Send message">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="chat-starters" id="chat-starters">
+        <button type="button" class="chat-chip" data-advisor-task="daily_brief" data-chat-q="Generate my daily action brief">Daily action brief</button>
+        <button type="button" class="chat-chip" data-advisor-task="followup_draft" data-chat-q="Draft a client follow-up message">Follow-up draft</button>
+        <button type="button" class="chat-chip" data-advisor-task="variance_explain" data-chat-q="Explain month-over-month profit variance">Variance explanation</button>
+        <button type="button" class="chat-chip" data-advisor-task="weekly_recap" data-chat-q="Generate this week's recap">Weekly recap</button>
+      </div>
+    </div>
+    <div class="chat-lightbox" id="chat-lightbox" hidden role="dialog" aria-modal="true" aria-label="Image preview">
+      <button type="button" class="chat-lightbox-close" id="chat-lightbox-close" aria-label="Close">&times;</button>
+      <img id="chat-lightbox-img" src="" alt="Full size attachment" />
+    </div>
+  </div>
+
+  <!-- YOUR TEAM -->
+  <div class="pg" id="page-team">
+    <div class="ph"><div><div class="pt">Your team</div><div class="ps">People and roles for this workspace only.</div></div></div>
+    <div class="g2">
+      <div class="card">
+        <div class="fst">Members</div>
+        <p id="team-page-hint" style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;"></p>
+        <div style="overflow:auto;">
+          <table class="dt" id="team-members-table" style="width:100%;">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th id="team-th-actions" style="display:none;width:200px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="team-members-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" id="team-invite-card" style="display:none;">
+        <div class="fst">Invite by email</div>
+        <p style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;">Creates a 7-day link you can send from your own email. They must sign in with the same address. Existing users can be added instantly with &quot;Add existing user&quot;.</p>
+        <div class="fg" style="margin-bottom:10px;">
+          <div class="fgp"><label class="fl">Email</label><input class="fi" id="team-invite-email" type="email" placeholder="name@company.com" /></div>
+          <div class="fgp"><label class="fl">Role</label>
+            <select class="fi" id="team-invite-role">
+              <option value="member">Employee</option>
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer (read-only)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <button type="button" class="btn btn-p" id="team-btn-create-invite">Create invite link</button>
+          <button type="button" class="btn" id="team-btn-add-existing">Add existing user</button>
+        </div>
+        <div id="team-invite-result" style="font-size:12px;color:var(--text2);word-break:break-all;display:none;"></div>
+      </div>
+      <div class="card" id="team-pending-invites-card" style="display:none;">
+        <div class="fst">Pending invitations</div>
+        <div id="team-pending-invites-body" style="font-size:13px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="pg" id="page-settings">
+    <div class="ph"><div><div class="pt">Settings</div><div class="ps">Business profile and preferences</div></div><button type="button" class="btn btn-p" id="btn-save-settings">Save Changes</button></div>
+    <div class="g2">
+      <div class="card">
+        <div class="fst">Business Info</div>
+        <div class="fg">
+          <div class="fgp"><label class="fl">Business Name</label><input class="fi" id="setting-name" /></div>
+          <div class="fgp"><label class="fl">Owner Name</label><input class="fi" id="setting-owner" /></div>
+          <div class="fgp"><label class="fl">Your role (optional)</label><input class="fi" id="setting-owner-role" placeholder="e.g. Founder" /></div>
+          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Tagline (optional)</label><textarea class="fi" id="setting-tagline" rows="2" placeholder="Short line under your business name on the dashboard" style="min-height:56px;resize:vertical;"></textarea></div>
+          <div class="fgp"><label class="fl">Email</label><input class="fi" id="setting-email" type="email" /></div>
+          <div class="fgp"><label class="fl">Phone</label><input class="fi" id="setting-phone" /></div>
+          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Address</label><input class="fi" id="setting-address" /></div>
+          <div class="fgp"><label class="fl">Dashboard period label</label><input class="fi" id="setting-period" placeholder="e.g. March 2026" /></div>
+          <div class="fgp"><label class="fl">Accent color</label><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><input class="fi" id="setting-accent" type="color" value="#e8501a" title="Color picker" style="min-height:40px;min-width:52px;padding:4px 8px;flex-shrink:0;" /><input class="fi" id="setting-accent-hex" type="text" value="#e8501a" inputmode="text" autocomplete="off" spellcheck="false" maxlength="7" placeholder="#3366cc" title="Hex value (#rgb or #rrggbb)" style="max-width:9rem;font-variant-numeric:tabular-nums;" /></div></div>
+          <div class="fgp"><label class="fl">Logo (light mode)</label><input class="fi" id="setting-logo-light" type="file" accept="image/*" /></div>
+          <div class="fgp"><label class="fl">Logo (dark mode)</label><input class="fi" id="setting-logo-dark" type="file" accept="image/*" /></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="fst">Financial Defaults</div>
+        <div class="fg">
+          <div class="fgp"><label class="fl">Invoice Terms (days)</label><input class="fi" id="setting-terms" type="number" value="30" /></div>
+          <div class="fgp"><label class="fl">Default Tax Rate (%)</label><input class="fi" id="setting-tax" type="number" value="0" /></div>
+          <div class="fgp"><label class="fl">Currency</label><select class="fi" id="setting-currency"><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
+          <div class="fgp"><label class="fl">Fiscal Year Start</label><select class="fi" id="setting-fiscal"><option>January</option><option>October</option></select></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="fst">Monthly Budgets</div>
+        <p style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:14px;">Set a monthly spending target per expense category. Progress is shown on the Expenses page.</p>
+        <div class="fg">
+          <div class="fgp"><label class="fl">Labor ($)</label><input class="fi" id="budget-input-lab" type="number" min="0" step="1" placeholder="e.g. 5000" /></div>
+          <div class="fgp"><label class="fl">Software &amp; Tools ($)</label><input class="fi" id="budget-input-sw" type="number" min="0" step="1" placeholder="e.g. 500" /></div>
+          <div class="fgp"><label class="fl">Advertising ($)</label><input class="fi" id="budget-input-ads" type="number" min="0" step="1" placeholder="e.g. 2000" /></div>
+          <div class="fgp"><label class="fl">Other ($)</label><input class="fi" id="budget-input-oth" type="number" min="0" step="1" placeholder="e.g. 300" /></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="fst">Cloud Sync</div>
+        <div class="fg">
+          <div id="settings-cloud-status" style="font-size:11px;color:var(--text3);margin-bottom:10px;">Cloud: not configured</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" class="btn btn-p" id="settings-btn-cloud-auth" style="flex:1;font-size:11px;padding:7px 10px;">Sign in</button>
+            <button type="button" class="btn" id="settings-btn-cloud-sync" style="flex:1;font-size:11px;padding:7px 10px;" disabled>Sync</button>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:10px;">
+            Data syncs to your workspace in the cloud (per organization). Open your workspace URL on each device and sign in with the <strong>same email</strong>. Use <strong>Sync</strong> on the dashboard to refresh from the server.
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="fst">Data import &amp; export</div>
+        <p style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;">Import a bank CSV into the transaction log, or export a journal CSV for spreadsheets or your accountant. Use <strong>Undo last import</strong> if something looks wrong.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn" id="btn-csv-import-open-settings">Import CSV</button>
+          <button type="button" class="btn" id="btn-journal-export-open-settings">Export journal CSV</button>
+          <button type="button" class="btn" id="btn-undo-last-import-settings" disabled>Undo last import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Add single transaction -->
+<div class="mo" id="transactionModal">
+  <div class="md">
+    <div class="mt">Add transaction</div>
+    <p class="ui-public-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;">Record one line of revenue or expense. It is saved to this cloud workspace and included in your totals.</p>
+    <p class="ui-internal-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;">Internal: add a line to this workspace’s totals (local cache + Supabase when signed in).</p>
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp"><label class="fl">Date</label><input class="fi" id="tx-date" type="date" /></div>
+      <div class="fgp"><label class="fl">Amount</label><input class="fi" id="tx-amount" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Category</label>
+        <select class="fi" id="tx-category">
+          <option value="svc">Services revenue</option>
+          <option value="ret">Retainer revenue</option>
+          <option value="own">Owner investment</option>
+          <option value="lab">Labor (expense)</option>
+          <option value="sw">Software &amp; tools (expense)</option>
+          <option value="ads">Advertising (expense)</option>
+          <option value="oth">Other expense</option>
+        </select>
+      </div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Note (optional)</label><input class="fi" id="tx-note" placeholder="e.g. Client invoice #104" /></div>
+      <div class="fgp rollout-panel" id="tx-other-wrapper" style="grid-column:1/-1;">
+        <label class="fl">Other expense label (for “Other expense” category)</label>
+        <input class="fi" id="tx-other-label" placeholder="e.g. Travel, Training, Misc." />
+      </div>
+      <div class="fgp rollout-panel" id="tx-other-type-wrapper" style="grid-column:1/-1;">
+        <label class="fl">Other expense type</label>
+        <input class="fi" id="tx-other-type" placeholder="e.g. One-time, Subscription" />
+      </div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="btn-tx-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-tx-save">Add transaction</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bank CSV import wizard -->
+<div class="mo" id="csvImportModal">
+  <div class="md" style="max-width:720px;max-height:92vh;display:flex;flex-direction:column;">
+    <div class="mt">Import bank CSV</div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:14px;">Choose a CSV export from your bank, map columns once, preview rows, then import. Amounts follow the same rules as manual transactions (positive amounts; category sets revenue vs expense).</p>
+    <div id="imp-step-1" class="imp-step" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+      <label class="fl">CSV file</label>
+      <input type="file" class="fi" id="imp-file" accept=".csv,text/csv" />
+      <div id="imp-file-status" style="font-size:12px;margin-top:10px;color:var(--text3);"></div>
+    </div>
+    <div id="imp-step-2" class="imp-step" style="display:none;flex:1;min-height:0;overflow:auto;">
+      <div class="fg" style="margin-bottom:12px;">
+        <div class="fgp" style="grid-column:1/-1;">
+          <label class="fl">Amount columns</label>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);"><input type="radio" name="imp-amount-mode" id="imp-amount-mode-single" value="single" checked /> Single signed amount (negative = outflow)</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);"><input type="radio" name="imp-amount-mode" id="imp-amount-mode-split" value="split" /> Separate Debit / Credit</label>
+          </div>
+        </div>
+        <div class="fgp" id="imp-wrap-col-date"><label class="fl">Date column</label><select class="fi" id="imp-col-date"></select></div>
+        <div class="fgp" id="imp-wrap-col-amount"><label class="fl">Amount column</label><select class="fi" id="imp-col-amount"></select></div>
+        <div class="fgp" id="imp-wrap-col-debit" style="display:none;"><label class="fl">Debit column</label><select class="fi" id="imp-col-debit"></select></div>
+        <div class="fgp" id="imp-wrap-col-credit" style="display:none;"><label class="fl">Credit column</label><select class="fi" id="imp-col-credit"></select></div>
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Description / memo</label><select class="fi" id="imp-col-description"></select></div>
+        <div class="fgp"><label class="fl">External ID (optional)</label><select class="fi" id="imp-col-external"></select></div>
+        <div class="fgp"><label class="fl">Default expense category</label>
+          <select class="fi" id="imp-default-exp-cat">
+            <option value="infer">Auto from description</option>
+            <option value="lab">Labor</option>
+            <option value="sw">Software &amp; tools</option>
+            <option value="ads">Advertising</option>
+            <option value="oth">Other</option>
+          </select>
+        </div>
+        <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="imp-import-revenue" /><label class="fl" for="imp-import-revenue" style="margin:0;">Also import inflows (credits) as revenue</label>
+        </div>
+        <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="imp-skip-dupes" checked /><label class="fl" for="imp-skip-dupes" style="margin:0;">Skip rows that look like duplicates (same date, amount, and description)</label>
+        </div>
+      </div>
+    </div>
+    <div id="imp-step-3" class="imp-step" style="display:none;flex:1;min-height:0;flex-direction:column;">
+      <div id="imp-preview-summary" style="font-size:13px;margin-bottom:10px;color:var(--text2);"></div>
+      <div style="overflow:auto;max-height:340px;border:1px solid var(--border);border-radius:var(--rl);">
+        <table class="dt" style="margin:0;">
+          <thead><tr><th>Date</th><th>Flow</th><th>Category</th><th>Amount</th><th>Description</th></tr></thead>
+          <tbody id="imp-preview-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="mf" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;flex-shrink:0;">
+      <button type="button" class="btn" id="imp-cancel">Cancel</button>
+      <button type="button" class="btn" id="imp-back" style="display:none;">Back</button>
+      <button type="button" class="btn btn-p" id="imp-next">Next</button>
+      <button type="button" class="btn btn-p" id="imp-commit" style="display:none;">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Journal CSV export -->
+<div class="mo" id="journalExportModal">
+  <div class="md" style="max-width:520px;">
+    <div class="mt">Export journal CSV</div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:14px;">Download ledger lines for a date range. Uses the same categories as your dashboard.</p>
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp"><label class="fl">Start date</label><input class="fi" id="journal-exp-start" type="date" /></div>
+      <div class="fgp"><label class="fl">End date</label><input class="fi" id="journal-exp-end" type="date" /></div>
+      <div class="fgp" style="grid-column:1/-1;">
+        <label class="fl">Format</label>
+        <select class="fi" id="journal-exp-format">
+          <option value="simple">Simple journal (one amount column)</option>
+          <option value="split">Debit / Credit columns</option>
+        </select>
+      </div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="journal-exp-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="journal-exp-download">Download CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice create/edit -->
+<div class="mo" id="invoiceModal">
+  <div class="md" style="max-width:560px;">
+    <div class="mt" id="invoice-modal-title">Create invoice</div>
+    <input type="hidden" id="invoice-income-id" value="" />
+    <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;" id="invoice-context">
+      <!-- Filled from JS with client/project summary for this income line -->
+    </div>
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp"><label class="fl">Invoice number</label><input class="fi" id="invoice-number" placeholder="e.g. 1001" /></div>
+      <div class="fgp"><label class="fl">Issue date</label><input class="fi" id="invoice-issue-date" type="date" /></div>
+      <div class="fgp"><label class="fl">Due date</label><input class="fi" id="invoice-due-date" type="date" /></div>
+      <div class="fgp"><label class="fl">Amount</label><input class="fi" id="invoice-amount" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="btn-invoice-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-invoice-save">Save invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice preview -->
+<div class="mo" id="invoicePreviewModal">
+  <div class="md" style="max-width:960px;max-height:92vh;padding:0;overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border);background:var(--bg2);">
+      <div style="font-size:15px;font-weight:600;">Invoice preview</div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn" id="btn-invoice-preview-print">Print</button>
+        <button type="button" class="btn" id="btn-invoice-preview-close">Close</button>
+      </div>
+    </div>
+    <div id="invoice-preview-body" style="background:#f3f3f3;padding:20px;max-height:calc(92vh - 64px);overflow:auto;"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="mo" id="timesheetModal">
+  <div class="md" style="max-width:700px;">
+    <div class="mt" id="timesheet-modal-title">Time Entry</div>
+    <input type="hidden" id="timesheet-edit-id" value="" />
+    <div class="fg" style="margin-bottom:14px;">
+      <div class="fgp"><label class="fl">Account*</label><input class="fi" id="ts-account" placeholder="Employee / account" /></div>
+      <div class="fgp"><label class="fl">Project*</label><input class="fi" id="ts-project" /></div>
+      <div class="fgp"><label class="fl">Task*</label><input class="fi" id="ts-task" /></div>
+      <div class="fgp"><label class="fl">Activity code</label><input class="fi" id="ts-activity-code" /></div>
+      <div class="fgp"><label class="fl">Time* (HH:MM)</label><input class="fi" id="ts-time" placeholder="01:30" /></div>
+      <div class="fgp">
+        <label class="fl">Type</label>
+        <div class="ts-radio">
+          <label><input type="radio" name="ts-billable" id="ts-billable" checked /> Billable</label>
+          <label><input type="radio" name="ts-billable" id="ts-nonbillable" /> Non-Billable</label>
+        </div>
+      </div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="ts-notes" rows="2" placeholder="Internal note"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;">
+        <a href="#" id="ts-toggle-external-note" style="font-size:12px;color:var(--text2);text-decoration:none;">+ Show External Note</a>
+      </div>
+      <div class="fgp rollout-panel" style="grid-column:1/-1;display:none;" id="ts-external-wrap"><label class="fl">External note</label><textarea class="fi" id="ts-external-note" rows="2"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;">
+        <label class="fl">Week Days*</label>
+        <div class="ts-weekdays">
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="1" /> Monday</label>
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="2" /> Tuesday</label>
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="3" /> Wednesday</label>
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="4" /> Thursday</label>
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="5" /> Friday</label>
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="6" /> Saturday</label>
+          <label class="ts-weekday"><input type="checkbox" class="ts-weekday-cb" data-dow="0" /> Sunday</label>
+        </div>
+      </div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="btn-timesheet-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-timesheet-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="mo" id="inputModal">
+  <div class="md">
+    <div class="mt">Update all totals</div>
+    <p style="font-size:12px;color:var(--text3);line-height:1.45;margin:-12px 0 18px;">Sets revenue and expense buckets directly. Saving here clears your transaction log so numbers stay in sync.</p>
+    <div class="fst">Revenue</div>
+    <div class="fg" style="margin-bottom:20px;">
+      <div class="fgp"><label class="fl">Services Revenue ($)</label><input class="fi" id="i-svc" type="number" value="0" /></div>
+      <div class="fgp"><label class="fl">Retainer Revenue ($)</label><input class="fi" id="i-ret" type="number" value="0" /></div>
+    </div>
+    <div class="fst">Expenses</div>
+    <div class="fg">
+      <div class="fgp"><label class="fl">Labor ($)</label><input class="fi" id="i-lab" type="number" value="0" /></div>
+      <div class="fgp"><label class="fl">Software & Tools ($)</label><input class="fi" id="i-sw" type="number" value="0" /></div>
+      <div class="fgp"><label class="fl">Advertising ($)</label><input class="fi" id="i-ads" type="number" value="0" /></div>
+      <div class="fgp"><label class="fl">Other Expenses ($)</label><input class="fi" id="i-oth" type="number" value="0" /></div>
+    </div>
+    <div class="mf">
+      <button type="button" class="btn" id="btn-close-input">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-apply-input">Update Dashboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- Non-functional action notice -->
+<div class="mo stub-pop" id="stubFeatureModal" onclick="if (event.target === this) this.classList.remove('on')">
+  <div class="md" onclick="event.stopPropagation()">
+    <div class="mt" id="stubFeatureTitle">Coming soon</div>
+    <p class="stub-body" id="stubFeatureBody">This action is not available in this version yet.</p>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn btn-p" id="stubFeatureOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cloud auth -->
+<div class="mo" id="cloudAuthModal">
+  <div class="md" style="max-width:420px;">
+    <div class="mt" id="cloud-auth-heading">Sign in to cloud sync</div>
+    <div class="fg" style="grid-template-columns:1fr;gap:10px;">
+      <div class="fgp"><label class="fl">Email</label><input class="fi" id="cloud-auth-email" type="email" placeholder="you@company.com" /></div>
+      <div class="fgp"><label class="fl">Password</label><input class="fi" id="cloud-auth-password" type="password" placeholder="••••••••" /></div>
+    </div>
+    <div class="mf" style="margin-top:16px;">
+      <button type="button" class="btn" id="btn-cloud-auth-cancel">Cancel</button>
+      <button type="button" class="btn" id="btn-cloud-auth-signup">Sign up</button>
+      <button type="button" class="btn btn-p" id="btn-cloud-auth-signin">Sign in</button>
+      <button type="button" class="btn btn-p" id="btn-cloud-auth-github" style="flex:1;">Continue with GitHub</button>
+    </div>
+  </div>
+</div>
+
+<!-- Client CRUD -->
+<div class="mo" id="clientModal">
+  <div class="md">
+    <div class="mt" id="client-modal-title">Add client</div>
+    <input type="hidden" id="client-edit-id" value="" />
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp"><label class="fl">Account / Company name *</label><input class="fi" id="client-company" /></div>
+      <div class="fgp"><label class="fl">Status</label><input class="fi" id="client-status" placeholder="e.g. Active, Lead" /></div>
+      <div class="fgp"><label class="fl">Salutation</label><input class="fi" id="client-salutation" placeholder="e.g. Mr., Ms., Dr." /></div>
+      <div class="fgp"><label class="fl">First name</label><input class="fi" id="client-first-name" /></div>
+      <div class="fgp"><label class="fl">Last name</label><input class="fi" id="client-last-name" /></div>
+      <div class="fgp"><label class="fl">Contact name (display)</label><input class="fi" id="client-contact" placeholder="Auto from first + last if blank" /></div>
+      <div class="fgp"><label class="fl">Title</label><input class="fi" id="client-title" /></div>
+      <div class="fgp"><label class="fl">Reports to</label><input class="fi" id="client-reports-to" placeholder="Manager / primary contact" /></div>
+      <div class="fgp"><label class="fl">Industry / Vertical</label><input class="fi" id="client-industry" list="client-industry-list" autocomplete="off" placeholder="Type or pick a suggestion" /><datalist id="client-industry-list"></datalist></div>
+      <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="client-retainer" /><label class="fl" for="client-retainer" style="margin:0;">Retainer client (counts toward Active Retainers)</label>
+      </div>
+      <div class="fgp"><label class="fl">Email</label><input class="fi" id="client-email" type="email" /></div>
+      <div class="fgp"><label class="fl">Phone</label><input class="fi" id="client-phone" /></div>
+      <div class="fgp" style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <input type="checkbox" id="client-email-opt-out" /><label class="fl" for="client-email-opt-out" style="margin:0;">Email opt out</label>
+      </div>
+      <div class="fgp"><label class="fl">Contact owner</label><input class="fi" id="client-owner" placeholder="Internal owner" /></div>
+      <div class="fgp"><label class="fl">Birthday</label><input class="fi" id="client-birthday" type="date" /></div>
+      <div class="fgp"><label class="fl">Preferred channel</label><input class="fi" id="client-preferred-channel" placeholder="e.g. Email, Phone, Slack" /></div>
+      <div class="fgp"><label class="fl">Communication style</label><input class="fi" id="client-communication-style" placeholder="e.g. Concise, Detailed" /></div>
+      <div class="fgp"><label class="fl">Last touch date</label><input class="fi" id="client-last-touch" type="date" /></div>
+      <div class="fgp"><label class="fl">Next follow-up date</label><input class="fi" id="client-next-follow-up" type="date" /></div>
+      <div class="fgp"><label class="fl">Mailing country</label><input class="fi" id="client-mailing-country" placeholder="e.g. United States" /></div>
+      <div class="fgp"><label class="fl">Mailing state/province</label><input class="fi" id="client-mailing-state" /></div>
+      <div class="fgp"><label class="fl">Mailing city</label><input class="fi" id="client-mailing-city" /></div>
+      <div class="fgp"><label class="fl">Mailing zip/postal code</label><input class="fi" id="client-mailing-zip" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Mailing street</label><textarea class="fi" id="client-mailing-street" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Description</label><textarea class="fi" id="client-description" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="client-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Relationship notes</label><textarea class="fi" id="client-relationship-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;padding-top:12px;border-top:1px solid var(--border);">
+        <div class="fl" style="margin-bottom:4px;">Customers tab (optional)</div>
+        <p style="font-size:12px;color:var(--text3);margin:0 0 12px;line-height:1.45;">Leave blank to use income and expenses linked to this client. Enter amounts to show fixed revenue and/or allocated cost in the Customers table; profit and margin update automatically.</p>
+        <div class="fg" style="grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="fgp"><label class="fl">Custom revenue</label><input class="fi" id="client-cust-revenue" type="number" min="0" step="0.01" placeholder="Auto from income" /></div>
+          <div class="fgp"><label class="fl">Custom allocated cost</label><input class="fi" id="client-cust-cost" type="number" min="0" step="0.01" placeholder="Auto from expenses" /></div>
+        </div>
+      </div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="btn-client-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-client-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Project CRUD -->
+<div class="mo" id="projectModal">
+  <div class="md" style="max-width:640px;">
+    <div class="mt" id="project-modal-title">Add project</div>
+    <input type="hidden" id="project-edit-id" value="" />
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Project name *</label><input class="fi" id="project-name" /></div>
+      <div class="fgp"><label class="fl">Client</label><select class="fi" id="project-client"><option value="">— None —</option></select></div>
+      <div class="fgp"><label class="fl">Status</label><select class="fi" id="project-status"></select></div>
+      <div class="fgp"><label class="fl">Type / category</label><input class="fi" id="project-category" placeholder="e.g. Web, Branding" /></div>
+      <div class="fgp"><label class="fl">Start date</label><input class="fi" id="project-start" type="date" /></div>
+      <div class="fgp"><label class="fl">Due date</label><input class="fi" id="project-due" type="date" /></div>
+      <div class="fgp"><label class="fl">Value / revenue ($)</label><input class="fi" id="project-value" type="number" min="0" step="0.01" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Description</label><textarea class="fi" id="project-desc" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+      <div class="fgp"><label class="fl">Client satisfaction (1–10)</label><input class="fi" id="project-satisfaction" type="number" min="1" max="10" step="1" placeholder="e.g. 8" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="project-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="project-archived" /><label class="fl" for="project-archived" style="margin:0;">Archived / closed</label>
+      </div>
+      <details id="project-case-study-details" style="grid-column:1/-1;margin-top:4px;border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;background:var(--bg3);">
+        <summary style="font-weight:600;cursor:pointer;user-select:none;outline:none;">Case study <span style="font-weight:400;color:var(--text3);font-size:12px;">(optional — website / portfolio)</span></summary>
+        <div id="project-case-study-body" class="rollout-panel on" style="margin-top:14px;display:flex;flex-direction:column;gap:12px;">
+          <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="project-case-study-published" />
+            <label class="fl" for="project-case-study-published" style="margin:0;">Show on website / in list when published</label>
+          </div>
+          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Case study category <span style="font-weight:400;color:var(--text3);font-size:12px;">(optional — separate from project type)</span></label><input class="fi" id="project-case-study-category" placeholder="e.g. Demand gen, Rebrand" /></div>
+          <div class="fgp" style="grid-column:1/-1;"><label class="fl">The challenge</label><textarea class="fi" id="project-case-study-challenge" rows="3" style="min-height:72px;resize:vertical;" placeholder="What problem did the client face?"></textarea></div>
+          <div class="fgp" style="grid-column:1/-1;">
+            <label class="fl">Our strategy</label>
+            <div style="font-size:12px;color:var(--text3);margin:0 0 8px;">Add titled points, or use a single narrative below if you leave the list empty.</div>
+            <div id="case-study-strategy-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+            <button type="button" class="btn" id="btn-case-study-strategy-add" style="margin-top:8px;font-size:12px;padding:4px 10px;">+ Add strategy point</button>
+            <label class="fl" style="margin-top:12px;">Single strategy narrative</label>
+            <textarea class="fi" id="project-case-study-strategy-plain" rows="2" style="min-height:56px;resize:vertical;" placeholder="Used when no points are filled above"></textarea>
+          </div>
+          <div class="fgp" style="grid-column:1/-1;"><label class="fl">The results <span style="font-weight:400;color:var(--text3);font-size:12px;">(one per line)</span></label><textarea class="fi" id="project-case-study-results" rows="3" style="min-height:72px;resize:vertical;" placeholder="+40% qualified leads&#10;2.1× ROAS"></textarea></div>
+        </div>
+      </details>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="btn-project-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-project-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Case study read-only (from Projects table View) -->
+<div class="mo" id="caseStudyViewModal">
+  <div class="md" style="max-width:640px;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="mt">Case study</div>
+    <div id="case-study-view-body" class="case-study-view-body" style="overflow:auto;flex:1;font-size:14px;line-height:1.5;color:var(--text);padding:4px 0 8px;"></div>
+    <div class="mf" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;">
+      <button type="button" class="btn btn-p" id="btn-case-study-view-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Expense CRUD -->
+<div class="mo" id="expenseModal">
+  <div class="md" style="max-width:540px;">
+    <div class="mt" id="expense-modal-title">Add expense</div>
+    <input type="hidden" id="expense-edit-id" value="" />
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp"><label class="fl">Title</label><input class="fi" id="expense-title" /></div>
+      <div class="fgp"><label class="fl">Category</label><input class="fi" id="expense-category" placeholder="e.g. Software, Travel" /></div>
+      <div class="fgp"><label class="fl">Amount *</label><input class="fi" id="expense-amount" type="number" min="0" step="0.01" /></div>
+      <div class="fgp"><label class="fl">Date</label><input class="fi" id="expense-date" type="date" /></div>
+      <div class="fgp"><label class="fl">Vendor / payee</label><input class="fi" id="expense-vendor" /></div>
+      <div class="fgp"><label class="fl">Client</label><select class="fi" id="expense-client"><option value="">— None (unallocated) —</option></select></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="expense-notes" rows="2"></textarea></div>
+      <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="expense-recurring" /><label class="fl" for="expense-recurring" style="margin:0;">Recurring</label>
+      </div>
+      <div id="expense-recurrence-panel" class="rollout-panel" style="display:none;grid-column:1/-1;padding:14px 16px;border-radius:var(--rl);border:1px solid var(--border);background:var(--bg3);margin-top:2px;">
+        <div style="font-weight:600;margin-bottom:12px;font-size:14px;">Recurrence</div>
+        <div class="fg" style="margin-bottom:0;">
+          <div class="fgp">
+            <label class="fl">Repeat</label>
+            <select class="fi" id="expense-recurrence-repeat">
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div class="fgp">
+            <label class="fl">Every</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input class="fi" type="number" id="expense-recurrence-interval" min="1" value="1" style="width:72px;" />
+              <span id="expense-recurrence-interval-label" style="font-size:13px;color:var(--text2);">month(s)</span>
+            </div>
+          </div>
+          <div class="fgp" id="expense-recurrence-monthly-row" style="grid-column:1/-1;">
+            <label class="fl">On day of month</label>
+            <input class="fi" type="number" id="expense-recurrence-dom" min="1" max="31" value="1" style="max-width:100px;" />
+          </div>
+          <div class="fgp" id="expense-recurrence-weekly-row" style="grid-column:1/-1;display:none;">
+            <label class="fl" style="width:100%;">On</label>
+            <div id="expense-recurrence-dow-wrap" style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="btn exp-rec-dow" data-dow="0" aria-pressed="false">S</button>
+              <button type="button" class="btn exp-rec-dow" data-dow="1" aria-pressed="false">M</button>
+              <button type="button" class="btn exp-rec-dow" data-dow="2" aria-pressed="false">T</button>
+              <button type="button" class="btn exp-rec-dow" data-dow="3" aria-pressed="false">W</button>
+              <button type="button" class="btn exp-rec-dow" data-dow="4" aria-pressed="false">T</button>
+              <button type="button" class="btn exp-rec-dow" data-dow="5" aria-pressed="false">F</button>
+              <button type="button" class="btn exp-rec-dow" data-dow="6" aria-pressed="false">S</button>
+            </div>
+          </div>
+          <div class="fgp" style="grid-column:1/-1;">
+            <label class="fl">End</label>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <select class="fi" id="expense-recurrence-end-mode" style="width:auto;min-width:150px;">
+                <option value="never">Never</option>
+                <option value="on">On date</option>
+              </select>
+              <input class="fi" type="date" id="expense-recurrence-end-date" style="max-width:170px;" />
+            </div>
+          </div>
+        </div>
+        <p id="expense-recurrence-summary" style="font-size:13px;color:var(--text2);margin:12px 0 0;line-height:1.5;"></p>
+      </div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;">
+      <button type="button" class="btn" id="btn-expense-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-expense-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Marketing campaign -->
+<div class="mo" id="campaignModal">
+  <div class="md" style="max-width:480px;">
+    <div class="mt" id="campaign-modal-title">New campaign</div>
+    <input type="hidden" id="campaign-edit-id" value="" />
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Campaign name *</label><input class="fi" id="campaign-name" placeholder="e.g. Q2 lead gen" /></div>
+      <div class="fgp"><label class="fl">Channel</label><input class="fi" id="campaign-channel" placeholder="e.g. Paid search, Email" /></div>
+      <div class="fgp"><label class="fl">Start date</label><input class="fi" id="campaign-start" type="date" /></div>
+      <div class="fgp"><label class="fl">Pipeline value</label><input class="fi" id="campaign-pipeline-value" type="number" min="0" step="1" placeholder="0" /></div>
+      <div class="fgp"><label class="fl">Status</label><select class="fi" id="campaign-status">
+        <option value="pipeline">Pipeline</option>
+        <option value="won">Won</option>
+        <option value="lost">Lost</option>
+      </select></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="campaign-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
+      <button type="button" class="btn" id="btn-campaign-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-campaign-save">Save campaign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Income CRUD -->
+<div class="mo" id="incomeModal">
+  <div class="md">
+    <div class="mt" id="income-modal-title">Add income</div>
+    <input type="hidden" id="income-edit-id" value="" />
+    <div class="fg" style="margin-bottom:16px;">
+      <div class="fgp"><label class="fl">Source / description</label><input class="fi" id="income-source" /></div>
+      <div class="fgp"><label class="fl">Amount *</label><input class="fi" id="income-amount" type="number" min="0" step="0.01" /></div>
+      <div class="fgp"><label class="fl">Date</label><input class="fi" id="income-date" type="date" /></div>
+      <div class="fgp"><label class="fl">Category</label><input class="fi" id="income-category" /></div>
+      <div class="fgp"><label class="fl">Client</label><select class="fi" id="income-client"><option value="">— None —</option></select></div>
+      <div class="fgp"><label class="fl">Project</label><select class="fi" id="income-project"><option value="">— None —</option></select></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="income-notes" rows="2"></textarea></div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;">
+      <button type="button" class="btn" id="btn-income-cancel">Cancel</button>
+      <button type="button" class="btn btn-p" id="btn-income-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Project statuses -->
+<div class="mo" id="statusModal">
+  <div class="md" style="max-width:420px;">
+    <div class="mt">Project statuses</div>
+    <p style="font-size:12px;color:var(--text3);margin:-8px 0 12px;">Customize labels for the project status dropdown. Removing a status does not delete projects using it.</p>
+    <div id="status-list" style="max-height:240px;overflow-y:auto;margin-bottom:12px;"></div>
+    <div class="fg" style="grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px;">
+      <div class="fgp"><label class="fl">New status</label><input class="fi" id="status-new-label" placeholder="e.g. In review" /></div>
+      <button type="button" class="btn btn-p" id="btn-status-add" style="height:40px;">Add</button>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;">
+      <button type="button" class="btn" id="btn-status-close">Close</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- #app-shell -->
+
+<!-- Workspaces (outside #app-shell so switcher works before shell is visible) -->
+<div class="mo" id="workspaceModal">
+  <div class="md" style="max-width:480px;">
+    <div class="mt" id="workspace-modal-heading">Workspaces</div>
+    <p class="ui-public-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:16px;">Your data lives in this cloud workspace. Each workspace has its own URL path, for example <code style="font-size:12px;color:var(--text);">yoursite.com/your-slug/</code>—bookmark it for quick access.</p>
+    <p class="ui-internal-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:16px;">Internal: org switcher uses <code style="font-size:12px;color:var(--text);">my_organizations</code> and navigates to <code style="font-size:12px;color:var(--text);">/{slug}/</code>.</p>
+    <div id="workspace-list"></div>
+    <div id="workspace-add-panel" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <div class="fst" style="margin-bottom:8px;">New workspace</div>
+      <p class="ui-public-facing" style="font-size:12px;color:var(--text3);line-height:1.45;margin:0 0 10px;">Creates another organization you own. Changing a workspace URL later will break old bookmarks.</p>
+      <div class="fg" style="margin-bottom:10px;">
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Workspace name *</label><input class="fi" id="ws-new-name" placeholder="e.g. Side project" /></div>
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">URL slug *</label><input class="fi" id="ws-new-slug" placeholder="e.g. side-project" autocomplete="off" /></div>
+      </div>
+      <div id="workspace-add-error" style="font-size:12px;color:var(--red);margin-bottom:8px;min-height:1em;"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button type="button" class="btn btn-p" id="btn-workspace-create-submit">Create and open</button>
+        <button type="button" class="btn" id="btn-workspace-add-cancel">Cancel</button>
+      </div>
+    </div>
+    <div class="mf" style="border-top:none;padding-top:0;margin-top:8px;">
+      <button type="button" class="btn btn-p" id="btn-workspace-add-another">+ Add workspace</button>
+      <button type="button" class="btn" id="btn-workspace-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- First-time workspace (outside #app-shell so it can show during onboarding) -->
+<div class="mo" id="onboardModal">
+  <div class="md" style="max-width:480px;">
+    <div class="mt" id="onboard-heading">Name your workspace</div>
+    <p class="ui-public-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">Choose how your organization appears and the URL you will use to open this dashboard. Data is stored in your Supabase workspace (not only in this browser).</p>
+    <p class="ui-public-facing" style="font-size:12px;color:var(--text3);line-height:1.45;margin-bottom:18px;">If you change the URL slug later, old links will stop working—pick something you can share with your team.</p>
+    <p class="ui-internal-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;">Internal: first-run org profile; updates <code style="font-size:12px;">organizations</code> + dashboard settings.</p>
+    <div class="fg" style="margin-bottom:12px;">
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Company / workspace name *</label><input class="fi" id="ob-name" placeholder="e.g. Acme Agency" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">URL slug *</label><input class="fi" id="ob-slug" placeholder="e.g. acme-agency" autocomplete="off" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Tagline (optional)</label><textarea class="fi" id="ob-tagline" rows="2" placeholder="Shown under your business name on the dashboard" style="min-height:64px;resize:vertical;"></textarea></div>
+      <div class="fgp"><label class="fl">Your name</label><input class="fi" id="ob-owner" placeholder="Jane Doe" /></div>
+      <div class="fgp"><label class="fl">Your role</label><input class="fi" id="ob-role" value="" placeholder="e.g. Founder" /></div>
+      <div class="fgp"><label class="fl">Accent color</label><input class="fi" id="ob-accent" type="color" value="#e8501a" style="min-height:40px;padding:4px 8px;" /></div>
+    </div>
+    <div id="onboard-error" style="font-size:13px;color:var(--red);margin-bottom:12px;min-height:1.2em;"></div>
+    <div class="mf" style="border-top:none;padding-top:0;">
+      <button type="button" class="btn btn-p" id="onboard-submit-btn">Save and continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="mobile-actions">
+  <button type="button" class="btn" onclick="document.getElementById('btn-add-client')?.click()">+ Client</button>
+  <button type="button" class="btn" onclick="document.getElementById('btn-add-project')?.click()">+ Project</button>
+  <button type="button" class="btn" onclick="document.getElementById('btn-add-expense')?.click()">+ Expense</button>
+  <button type="button" class="btn" onclick="document.getElementById('btn-add-time')?.click()">+ Time</button>
+  <button type="button" class="btn btn-p" onclick="document.getElementById('btn-add-income')?.click()">+ Income</button>
+</div>
+
+<script>
+  document.getElementById('btn-close-input')?.addEventListener('click', function () {
+    document.getElementById('inputModal').classList.remove('on');
+  });
+  document.getElementById('btn-apply-input')?.addEventListener('click', function () {
+    if (window.updateData) window.updateData();
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/assets/financial-core.js?v=20260408-industry"></script>
+<script src="/assets/supabase-auth.js"></script>
+<script src="/assets/dashboard-assistant.js"></script>
+</body>
+</html>

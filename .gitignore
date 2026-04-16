@@ -1,0 +1,12 @@
+node_modules/
+.vite/
+# App loads financial-core.js only; ignore stray Vite entry chunks in public/
+public/assets/index-*.js
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+supabase/.temp/
+# Local Next.js experiment; not part of static dashboard
+my-agent-next/
