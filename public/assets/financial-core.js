@@ -189,6 +189,11 @@
       is_retainer: client.retainer === true,
       pipeline_id: client.pipelineId || null,
       pipeline_stage_id: client.pipelineStageId || null,
+      lead_source: client.leadSource || null,
+      utm_source: client.utmSource || null,
+      utm_medium: client.utmMedium || null,
+      utm_campaign: client.utmCampaign || null,
+      salesforce_status: client.salesforceStatus || 'not_exported',
     };
     var cmeta = buildClientMetadata(client);
     row.metadata = cmeta || {};
@@ -247,21 +252,21 @@
   // ---------- Clients store ----------
 
   var CLIENTS_KEY = 'clients:v1';
-  var CUSTOMERS_COLUMNS_PREFS_KEY = 'customers-columns:v1';
+  var CUSTOMERS_COLUMNS_PREFS_KEY = 'customers-columns:v3';
   var CUSTOMERS_COLUMN_DEFS = [
     { id: 'company', label: 'Company', index: 1 },
     { id: 'contact', label: 'Contact', index: 2 },
     { id: 'email', label: 'Email', index: 3 },
     { id: 'phone', label: 'Phone', index: 4 },
-    { id: 'preferred', label: 'Preferred', index: 5 },
-    { id: 'style', label: 'Style', index: 6 },
-    { id: 'status', label: 'Status', index: 7 },
-    { id: 'projects', label: 'Projects', index: 8 },
-    { id: 'revenue', label: 'Revenue', index: 9 },
-    { id: 'allocated', label: 'Allocated cost', index: 10 },
-    { id: 'profit', label: 'Profit', index: 11 },
-    { id: 'margin', label: 'Margin', index: 12 },
-    { id: 'roi', label: 'ROI', index: 13 },
+    { id: 'leadSource', label: 'Lead source', index: 5 },
+    { id: 'utmSource', label: 'UTM source', index: 6 },
+    { id: 'utmMedium', label: 'UTM medium', index: 7 },
+    { id: 'utmCampaign', label: 'UTM campaign', index: 8 },
+    { id: 'status', label: 'Status', index: 9 },
+    { id: 'industry', label: 'Industry', index: 10 },
+    { id: 'nextFollowUp', label: 'Next follow-up', index: 11 },
+    { id: 'projects', label: 'Campaigns', index: 12 },
+    { id: 'salesforce', label: 'Salesforce', index: 13 },
     { id: 'actions', label: 'Actions', index: 14, locked: true },
   ];
 
@@ -327,12 +332,12 @@
     try {
       var raw = localStorage.getItem(storageKey(STATUS_KEY));
       if (!raw) {
-        return ['Not started', 'In progress', 'Blocked', 'Complete'];
+        return ['Draft', 'Active', 'Paused', 'Ended', 'Complete'];
       }
       var arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.length ? arr : ['Not started', 'In progress', 'Blocked', 'Complete'];
+      return Array.isArray(arr) && arr.length ? arr : ['Draft', 'Active', 'Paused', 'Ended', 'Complete'];
     } catch (_) {
-      return ['Not started', 'In progress', 'Blocked', 'Complete'];
+      return ['Draft', 'Active', 'Paused', 'Ended', 'Complete'];
     }
   }
 
@@ -1328,6 +1333,9 @@
       caseStudyStrategy: normalizeCaseStudyStrategyFromDb(row.case_study_strategy),
       caseStudyResults: normalizeCaseStudyResultsFromDb(row.case_study_results),
       caseStudyCategory: row.case_study_category || '',
+      channel: row.channel || '',
+      budget: row.budget != null ? Number(row.budget) : 0,
+      leadsGenerated: row.leads_generated != null ? Number(row.leads_generated) : 0,
     };
   }
 
@@ -1355,6 +1363,9 @@
       case_study_strategy: strat,
       case_study_results: res,
       case_study_category: p.caseStudyCategory || null,
+      channel: p.channel || null,
+      budget: p.budget != null && !isNaN(p.budget) ? p.budget : 0,
+      leads_generated: p.leadsGenerated != null && !isNaN(p.leadsGenerated) ? Math.round(p.leadsGenerated) : 0,
     };
   }
 
@@ -1686,7 +1697,7 @@
         phone: val('setting-phone'),
         address: val('setting-address'),
         period: val('setting-period'),
-        accent: parseAccentHexOrNull(val('setting-accent-hex')) || normalizeHexColor(val('setting-accent'), '#e8501a'),
+        accent: parseAccentHexOrNull(val('setting-accent-hex')) || normalizeHexColor(val('setting-accent'), '#d4f542'),
         terms: Math.max(0, Math.round(numEl('setting-terms', 30))),
         tax: Math.max(0, numEl('setting-tax', 0)),
         currency: curEl && curEl.value ? curEl.value : 'USD',
@@ -1751,7 +1762,7 @@
       if (biz.address != null) setv('setting-address', biz.address);
       if (biz.period != null) setv('setting-period', biz.period);
       if (biz.accent) {
-        var accentNorm = normalizeHexColor(biz.accent, '#e8501a');
+        var accentNorm = normalizeHexColor(biz.accent, '#d4f542');
         setv('setting-accent', accentNorm);
         setv('setting-accent-hex', accentNorm);
       }
@@ -1761,7 +1772,7 @@
       if (cur && biz.currency) cur.value = biz.currency;
       var fis = gid('setting-fiscal');
       if (fis && biz.fiscal) fis.value = biz.fiscal;
-      if (biz.accent) applyAccentBranding(normalizeHexColor(biz.accent, '#e8501a'));
+      if (biz.accent) applyAccentBranding(normalizeHexColor(biz.accent, '#d4f542'));
       var lightSigned = await resolveBrandLogoStorageUrl(biz.logo_light_url || '');
       var darkSigned = await resolveBrandLogoStorageUrl(biz.logo_dark_url || '');
       applyBrandLogo(lightSigned, darkSigned);
@@ -1830,6 +1841,24 @@
       g: parseInt(n.slice(3, 5), 16),
       b: parseInt(n.slice(5, 7), 16),
     };
+  }
+
+  /** WCAG relative luminance for sRGB hex (used for text on accent fills). */
+  function relativeLuminanceFromRgb(rgb) {
+    if (!rgb) return 0;
+    function lin(c) {
+      c = c / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+    var r = lin(rgb.r);
+    var g = lin(rgb.g);
+    var b = lin(rgb.b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function contrastTextOnAccent(accentHex) {
+    var rgb = hexToRgb(normalizeHexColor(accentHex, '#d4f542'));
+    return relativeLuminanceFromRgb(rgb) > 0.52 ? '#111111' : '#ffffff';
   }
 
   function darkenHex(hex, factor) {
@@ -1943,7 +1972,7 @@
   }
 
   function applyAccentBranding(accentHex) {
-    var accent = normalizeHexColor(accentHex, '#e8501a');
+    var accent = normalizeHexColor(accentHex, '#d4f542');
     var rgb = hexToRgb(accent);
     if (!rgb) return;
     var root = document.documentElement;
@@ -1955,6 +1984,7 @@
     root.style.setProperty('--coral-border-mid', 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.18)');
     root.style.setProperty('--coral-border-strong', 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.2)');
     root.style.setProperty('--coral-border-focus', 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.35)');
+    root.style.setProperty('--on-accent', contrastTextOnAccent(accent));
 
     // Chart "branding kit" derived from accent (revenue line, bars, doughnut slices, spend borders).
     CHART_ORANGE = accent;
@@ -2098,6 +2128,11 @@
       retainer: retainer,
       pipelineId: row.pipeline_id || null,
       pipelineStageId: row.pipeline_stage_id || null,
+      leadSource: row.lead_source || '',
+      utmSource: row.utm_source || '',
+      utmMedium: row.utm_medium || '',
+      utmCampaign: row.utm_campaign || '',
+      salesforceStatus: row.salesforce_status || 'not_exported',
     };
     return applyClientMetadata(base, meta);
   }
@@ -3238,6 +3273,8 @@ var expenseChart = null;
 var revExpChart = null;
 var projTypeChart = null;
 var projMonthlyChart = null;
+var mkDashLineChart = null;
+var mkDashBarChart = null;
 var revTrendChart = null;
 var verticalChart = null;
 var leadSourceChart = null;
@@ -3313,7 +3350,7 @@ var incomePowerState = {
   }
 
   // Light UI chart theme: primary series follow Settings accent; muted grays for secondary series.
-  var CHART_ORANGE = '#e8501a';
+  var CHART_ORANGE = '#d4f542';
   var CHART_ORANGE_FILL = 'rgba(232, 80, 26, 0.1)';
   var CHART_ORANGE_FILL_BAR = 'rgba(232, 80, 26, 0.32)';
   var CHART_ORANGE_BORDER_BAR = 'rgba(232, 80, 26, 0.45)';
@@ -4667,10 +4704,10 @@ var incomePowerState = {
     var accentHexInput = document.getElementById('setting-accent-hex');
     if (accentInput) {
       function accentHexNow() {
-        return parseAccentHexOrNull(accentHexInput && accentHexInput.value) || normalizeHexColor(accentInput.value, '#e8501a');
+        return parseAccentHexOrNull(accentHexInput && accentHexInput.value) || normalizeHexColor(accentInput.value, '#d4f542');
       }
       function syncAccentFieldsAndApply(hex) {
-        var h = normalizeHexColor(hex, '#e8501a');
+        var h = normalizeHexColor(hex, '#d4f542');
         accentInput.value = h;
         if (accentHexInput) accentHexInput.value = h;
         applyAccentBranding(h);
@@ -4680,14 +4717,14 @@ var incomePowerState = {
         }
       }
       if (accentHexInput && !accentHexInput.value.trim()) {
-        accentHexInput.value = normalizeHexColor(accentInput.value, '#e8501a');
+        accentHexInput.value = normalizeHexColor(accentInput.value, '#d4f542');
       }
       syncAccentFieldsAndApply(accentHexNow());
       accentInput.addEventListener('input', function () {
-        syncAccentFieldsAndApply(normalizeHexColor(accentInput.value, '#e8501a'));
+        syncAccentFieldsAndApply(normalizeHexColor(accentInput.value, '#d4f542'));
       });
       accentInput.addEventListener('change', function () {
-        syncAccentFieldsAndApply(normalizeHexColor(accentInput.value, '#e8501a'));
+        syncAccentFieldsAndApply(normalizeHexColor(accentInput.value, '#d4f542'));
       });
       if (accentHexInput) {
         accentHexInput.addEventListener('input', function () {
@@ -4699,7 +4736,7 @@ var incomePowerState = {
           if (p) {
             syncAccentFieldsAndApply(p);
           } else {
-            syncAccentFieldsAndApply(normalizeHexColor(accentInput.value, '#e8501a'));
+            syncAccentFieldsAndApply(normalizeHexColor(accentInput.value, '#d4f542'));
           }
         });
       }
@@ -4900,11 +4937,12 @@ var incomePowerState = {
   }
 
   function buildWeeklySummaryText(kind) {
-    var c = state.computed || compute({ mode: 'all', start: null, end: null });
-    var openInvoices = invoices.filter(function (i) { return i && i.status !== 'paid'; }).length;
-    var doneProjects = projects.filter(function (p) { return p && String(p.status || '').toLowerCase().indexOf('complete') !== -1; }).length;
     var prefix = kind === 'monday' ? 'Monday summary' : 'Friday recap';
-    return prefix + ': Revenue ' + fmtCurrency(c.revenueTotal || 0) + ', expenses ' + fmtCurrency(c.expenseTotal || 0) + ', open invoices ' + openInvoices + ', delivered projects ' + doneProjects + '.';
+    var nClients = clients.length;
+    var camps = projects.length;
+    var sm = lastMarketingGa4Dashboard && lastMarketingGa4Dashboard.summary;
+    var sess = sm && sm.sessions != null ? fmtInt(sm.sessions) : '—';
+    return prefix + ': ' + nClients + ' clients, ' + camps + ' campaigns, GA4 sessions (28d) ' + sess + '.';
   }
 
   function wirePersonableActions() {
@@ -5026,28 +5064,38 @@ var incomePowerState = {
 
   function renderAll() {
     var c = state.computed;
-    if (!c) return;
-    renderKPIs(c);
-    renderExpenseChart(c);
-    renderIncomeStatement(c);
-    renderTransactionLog(c);
-    renderExpensesTable(c);
-    renderBudgetVsActual();
-    renderSpendingReport();
-    renderRevenueVsExpenses(c);
-    renderIncomeSection(c);
-    renderRevenueByVertical(c);
-    renderInsights();
-    renderMarketing();
-    renderDashAR();
-    renderClients();
-    renderRetention();
-    renderTimesheet();
+    if (!c) {
+      try {
+        state.computed = compute(state.filter);
+        c = state.computed;
+      } catch (_) {
+        return;
+      }
+    }
+    if ($('kpi-rev')) renderKPIs(c);
+    if ($('cExp')) renderExpenseChart(c);
+    if ($('dashboard-ops-statement') || $('dashboard-legacy-statement')) renderIncomeStatement(c);
+    if ($('transaction-log-table')) renderTransactionLog(c);
+    if ($('expenses-table')) renderExpensesTable(c);
+    if ($('budget-vs-actual')) renderBudgetVsActual();
+    if ($('spend-slice')) renderSpendingReport();
+    if ($('cRevExp')) renderRevenueVsExpenses(c);
+    if ($('page-revenue')) renderIncomeSection(c);
+    if ($('page-revenue')) renderRevenueByVertical(c);
+    if ($('page-insights')) renderInsights();
+    if ($('marketing-pipeline')) renderMarketing();
+    if ($('dash-ar-table')) renderDashAR();
+    refreshCrmDirectoryViews();
+    if ($('page-retention')) renderRetention();
+    if ($('timesheet-tbody')) renderTimesheet();
     renderPersonableCards();
+    renderMarketingDashboard(false);
     var pgTasks = document.getElementById('page-tasks');
     if (pgTasks && pgTasks.classList.contains('on')) renderTasksPage();
     var pgSet = document.getElementById('page-settings');
     if (pgSet && pgSet.classList.contains('on')) renderAutomationSettings();
+    var pgRep = document.getElementById('page-reports');
+    if (pgRep && pgRep.classList.contains('on')) renderReportsActiveTab();
   }
 
   function renderPersonableCards() {
@@ -5071,20 +5119,7 @@ var incomePowerState = {
       }
     }
 
-    var reminders = [];
-    clients.forEach(function (c) {
-      if (!c || !c.lastTouchAt) return;
-      var d = new Date(c.lastTouchAt + 'T12:00:00');
-      if (isNaN(d.getTime())) return;
-      var days = Math.floor((now - d) / 86400000);
-      if (days >= 30) reminders.push({ client: c, text: days + ' days since last outreach' });
-    });
-    var remEl = $('crm-reminders-list');
-    if (remEl) {
-      remEl.innerHTML = reminders.length ? reminders.slice(0, 6).map(function (r) {
-        return '<div class="kb bn" style="padding:8px 10px;background:var(--bg2);">' + esc(r.client.companyName || 'Client') + ': ' + esc(r.text) + '</div>';
-      }).join('') : '<div style="font-size:13px;color:var(--text3);">No overdue follow-ups right now.</div>';
-    }
+    renderClientRelationshipPanels();
 
     var suggestions = [];
     clients.forEach(function (c) {
@@ -5093,8 +5128,10 @@ var incomePowerState = {
         var daysSince = Math.floor((now - new Date(c.lastTouchAt + 'T12:00:00')) / 86400000);
         if (daysSince > 30) suggestions.push({ c: c, text: 'Send a quick check-in via ' + (c.preferredChannel || 'email') + '.' });
       }
-      var overdue = invoices.some(function (inv) { return inv && inv.status !== 'paid' && inv.dueDate && (new Date(inv.dueDate) < now); });
-      if (overdue && c.preferredChannel) suggestions.push({ c: c, text: 'Overdue invoice: follow up on ' + c.preferredChannel + '.' });
+      if ($('dash-ar-body')) {
+        var overdue = invoices.some(function (inv) { return inv && inv.status !== 'paid' && inv.dueDate && (new Date(inv.dueDate) < now); });
+        if (overdue && c.preferredChannel) suggestions.push({ c: c, text: 'Overdue invoice: follow up on ' + c.preferredChannel + '.' });
+      }
       var completed = projects.some(function (p) { return p && p.clientId === c.id && String(p.status || '').toLowerCase().indexOf('complete') !== -1; });
       if (completed) suggestions.push({ c: c, text: 'Ask for a testimonial for the delivered project.' });
     });
@@ -5109,36 +5146,27 @@ var incomePowerState = {
     }
 
     var milestones = [];
-    var firstPaid = invoices.filter(function (x) { return x && x.status === 'paid'; }).sort(function (a, b) { return String(a.paidAt || '').localeCompare(String(b.paidAt || '')); })[0];
-    if (firstPaid) {
-      milestones.push('First paid invoice: #' + (firstPaid.number || '—'));
-      addCrmEvent('milestone', 'First paid invoice', { invoiceNumber: firstPaid.number || '' }, null, 'milestone:first-paid');
+    if (lastMarketingGa4Dashboard && lastMarketingGa4Dashboard.summary) {
+      var sm = lastMarketingGa4Dashboard.summary;
+      if (sm.sessionsDeltaPct != null && isFinite(sm.sessionsDeltaPct)) {
+        milestones.push('Sessions vs prior 28d: ' + (sm.sessionsDeltaPct >= 0 ? '+' : '') + Number(sm.sessionsDeltaPct).toFixed(1) + '%');
+      }
+      if (sm.topChannel) milestones.push('Top channel (28d): ' + sm.topChannel);
     }
-    var monthMap = {};
-    (state.transactions || []).forEach(function (tx) {
-      if (!tx || (tx.category !== 'svc' && tx.category !== 'ret') || !tx.date) return;
-      var ym = tx.date.slice(0, 7);
-      monthMap[ym] = (monthMap[ym] || 0) + (Number(tx.amount) || 0);
-    });
-    var bestMonth = Object.keys(monthMap).sort(function (a, b) { return monthMap[b] - monthMap[a]; })[0];
-    if (bestMonth) {
-      milestones.push('Best month: ' + bestMonth + ' (' + fmtCurrency(monthMap[bestMonth]) + ')');
-      addCrmEvent('milestone', 'Best revenue month', { month: bestMonth, revenue: monthMap[bestMonth] }, null, 'milestone:best-month:' + bestMonth);
-    }
-    if (projects.some(function (p) { return p && String(p.status || '').toLowerCase().indexOf('complete') !== -1; })) {
-      milestones.push('Project delivered');
-      addCrmEvent('milestone', 'Project delivered', {}, null, 'milestone:project-delivered');
+    var activeCamp = projects.filter(function (p) {
+      if (!p || p.archived) return false;
+      var s = String(p.status || '').toLowerCase();
+      return s.indexOf('ended') === -1 && s.indexOf('complete') === -1;
+    }).length;
+    if (activeCamp) milestones.push(activeCamp + ' open campaigns');
+    if ($('dash-ar-body')) {
+      var firstPaid = invoices.filter(function (x) { return x && x.status === 'paid'; }).sort(function (a, b) { return String(a.paidAt || '').localeCompare(String(b.paidAt || '')); })[0];
+      if (firstPaid) {
+        milestones.push('First paid invoice: #' + (firstPaid.number || '—'));
+      }
     }
     var milEl = $('crm-milestones-list');
     if (milEl) milEl.innerHTML = milestones.length ? milestones.map(function (m) { return '<div class="kb bn" style="padding:8px 10px;background:var(--bg2);">' + esc(m) + '</div>'; }).join('') : '<div style="font-size:13px;color:var(--text3);">No milestones yet.</div>';
-
-    var evEl = $('crm-events-timeline');
-    if (evEl) {
-      evEl.innerHTML = crmEvents.length ? crmEvents.slice(0, 8).map(function (ev) {
-        var when = ev.eventAt ? new Date(ev.eventAt).toLocaleDateString() : '—';
-        return '<div style="padding:8px 10px;border:1px solid var(--border);border-radius:10px;"><div style="font-size:12px;color:var(--text3);">' + esc(when) + ' • ' + esc(ev.kind || 'event') + '</div><div style="font-size:13px;color:var(--text2);">' + esc(ev.title || '') + '</div></div>';
-      }).join('') : '<div style="font-size:13px;color:var(--text3);">No timeline events yet.</div>';
-    }
 
     var latestSummary = $('crm-latest-summary');
     if (latestSummary) {
@@ -6309,6 +6337,532 @@ var incomePowerState = {
     }
   }
 
+  var lastMarketingGa4Dashboard = null;
+  var marketingDashFetchToken = 0;
+  var reportsActiveTab = 'channel_performance';
+  var reportsPageWired = false;
+
+  function ga4UnwrapInvokeEnvelope(body) {
+    if (!body || body.configured === false) {
+      return { ok: false, configured: false, reason: body && body.reason, error: body && body.error, details: body && body.details, data: null };
+    }
+    if (body.error && !body.data) {
+      return { ok: false, configured: true, error: body.error, details: body.details, data: null };
+    }
+    var inner = body.data;
+    if (inner && typeof inner === 'object') {
+      return { ok: true, configured: true, cached: !!body.cached, reportKey: body.reportKey, data: inner };
+    }
+    return { ok: true, configured: true, data: body };
+  }
+
+  async function fetchMarketingGa4Report(reportKey) {
+    if (isDemoDashboardUser()) {
+      var dk = String(reportKey || 'dashboard').trim() || 'dashboard';
+      return { ok: true, configured: true, cached: true, reportKey: dk, data: getMarketingDemoReportData(dk) };
+    }
+    var sb = window.supabaseClient || supabase;
+    var orgId = getCurrentOrgId();
+    if (!sb || !orgId) return { ok: false, error: 'Select a workspace.' };
+    var sessRes = await sb.auth.getSession();
+    var sess = sessRes && sessRes.data ? sessRes.data.session : null;
+    if (!sess || !sess.access_token) return { ok: false, error: 'Sign in to load analytics.' };
+    var res = await sb.functions.invoke('marketing-ga4', {
+      body: { organizationId: orgId, reportKey: reportKey || 'dashboard' },
+      headers: { Authorization: 'Bearer ' + sess.access_token },
+    });
+    if (res.error) return { ok: false, error: res.error.message || 'Edge function error' };
+    return ga4UnwrapInvokeEnvelope(res.data);
+  }
+
+  function fmtGa4Pct(x) {
+    var n = Number(x);
+    if (!isFinite(n)) return '—';
+    return (n * 100).toLocaleString(undefined, { maximumFractionDigits: 2 }) + '%';
+  }
+
+  /** Deterministic illustrative GA4 bundle for the “View Demo” account (no network). */
+  function buildMarketingDemoGa4DashboardData() {
+    var groupNames = ['Organic Search', 'Paid Search', 'Direct', 'Email', 'Referral'];
+    var series = [];
+    var pad2 = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    var end = new Date(2026, 3, 16);
+    var bi;
+    for (bi = 27; bi >= 0; bi--) {
+      var dt = new Date(end);
+      dt.setDate(dt.getDate() - bi);
+      var ds = dt.getFullYear() + pad2(dt.getMonth() + 1) + pad2(dt.getDate());
+      var ci;
+      for (ci = 0; ci < groupNames.length; ci++) {
+        var v = 16 + ((bi + ci * 5) % 12) + ci * 4;
+        series.push({ date: ds, channel: groupNames[ci], sessions: v });
+      }
+    }
+    var totalSessions = series.reduce(function (a, r) {
+      return a + (Number(r.sessions) || 0);
+    }, 0);
+    var conversions = Math.max(1, Math.round(totalSessions * 0.036));
+    var newUsers = Math.max(1, Math.round(totalSessions * 0.42));
+    var cvr = totalSessions > 0 ? conversions / totalSessions : 0;
+    var byCh = {};
+    series.forEach(function (r) {
+      var k = String(r.channel || 'Other');
+      byCh[k] = (byCh[k] || 0) + (Number(r.sessions) || 0);
+    });
+    var channelRows = Object.keys(byCh).map(function (ch) {
+      return { channel: ch, sessions: byCh[ch] };
+    });
+    channelRows.sort(function (a, b) {
+      return (b.sessions || 0) - (a.sessions || 0);
+    });
+    return {
+      dateRange: '20260320:20260416',
+      summary: {
+        sessions: totalSessions,
+        sessionsPrev: Math.round(totalSessions * 0.91),
+        sessionsDeltaPct: 9.4,
+        newUsers: newUsers,
+        newUsersPrev: Math.round(newUsers * 0.88),
+        newUsersDeltaPct: 6.2,
+        totalUsers: Math.round(newUsers * 1.15),
+        conversions: conversions,
+        conversionRate: cvr,
+        conversionRatePrev: cvr * 0.94,
+        engagementRate: 0.628,
+        avgSessionDuration: 196,
+        topChannel: channelRows[0] ? channelRows[0].channel : 'Organic Search',
+        costPerLead: null,
+        leadsNote: 'Demo data.',
+      },
+      channels: channelRows,
+      sessionsByDayChannel: series,
+      landingPages: [
+        { landingPage: '/', sessions: 8420, conversions: 312, cvr: 312 / 8420 },
+        { landingPage: '/pricing', sessions: 2910, conversions: 168, cvr: 168 / 2910 },
+        { landingPage: '/demo', sessions: 1844, conversions: 124, cvr: 124 / 1844 },
+        { landingPage: '/blog/ga4-setup', sessions: 1210, conversions: 54, cvr: 54 / 1210 },
+        { landingPage: '/contact', sessions: 980, conversions: 88, cvr: 88 / 980 },
+      ],
+      topCampaigns: [
+        { campaign: 'spring_launch_2026', sessions: 4200 },
+        { campaign: 'brand_search_exact', sessions: 3180 },
+        { campaign: 'newsletter_apr', sessions: 1640 },
+        { campaign: '(direct)', sessions: 920 },
+      ],
+    };
+  }
+
+  function getMarketingDemoReportData(reportKey) {
+    var k = String(reportKey || 'dashboard').trim() || 'dashboard';
+    if (k === 'dashboard') return buildMarketingDemoGa4DashboardData();
+    if (k === 'channel_performance') {
+      return {
+        dateRange: '28d',
+        rows: [
+          { sessionSource: 'google', sessionMedium: 'organic', sessions: 11820, newUsers: 5020, conversions: 412, cvr: 412 / 11820 },
+          { sessionSource: 'google', sessionMedium: 'cpc', sessions: 6420, newUsers: 2840, conversions: 198, cvr: 198 / 6420 },
+          { sessionSource: '(direct)', sessionMedium: '(none)', sessions: 3920, newUsers: 1120, conversions: 96, cvr: 96 / 3920 },
+          { sessionSource: 'newsletter', sessionMedium: 'email', sessions: 2180, newUsers: 980, conversions: 74, cvr: 74 / 2180 },
+          { sessionSource: 'linkedin.com', sessionMedium: 'referral', sessions: 1640, newUsers: 720, conversions: 52, cvr: 52 / 1640 },
+        ],
+      };
+    }
+    if (k === 'audience') {
+      return {
+        dateRange: '28d',
+        devices: [
+          { deviceCategory: 'desktop', sessions: 14200, newUsers: 5820 },
+          { deviceCategory: 'mobile', sessions: 9840, newUsers: 5120 },
+          { deviceCategory: 'tablet', sessions: 620, newUsers: 210 },
+        ],
+        topCities: [
+          { city: 'San Francisco', sessions: 2180 },
+          { city: 'New York', sessions: 1920 },
+          { city: 'London', sessions: 1640 },
+          { city: 'Austin', sessions: 980 },
+          { city: 'Toronto', sessions: 760 },
+        ],
+      };
+    }
+    if (k === 'campaign_roi') {
+      return {
+        dateRange: '28d',
+        ga4Campaigns: [
+          { campaignName: 'spring_launch_2026', sessions: 4200, conversions: 168, cvr: 168 / 4200 },
+          { campaignName: 'brand_search_exact', sessions: 3180, conversions: 112, cvr: 112 / 3180 },
+          { campaignName: 'newsletter_apr', sessions: 1640, conversions: 96, cvr: 96 / 1640 },
+          { campaignName: 'partner_webinar', sessions: 920, conversions: 48, cvr: 48 / 920 },
+        ],
+      };
+    }
+    if (k === 'attribution') {
+      return {
+        dateRange: '28d',
+        utmCampaigns: [
+          { campaign: 'spring_launch_2026', source: 'google', medium: 'cpc', sessions: 4200, conversions: 168, cvr: 168 / 4200 },
+          { campaign: 'newsletter_apr', source: 'newsletter', medium: 'email', sessions: 1640, conversions: 96, cvr: 96 / 1640 },
+          { campaign: 'linkedin_apr', source: 'linkedin', medium: 'paid', sessions: 980, conversions: 38, cvr: 38 / 980 },
+        ],
+      };
+    }
+    return { note: 'Unknown report key', reportKey: k };
+  }
+
+  function paintMarketingGa4DashboardFromData(data) {
+    var sum = (data && data.summary) || {};
+
+    setText('mkt-kpi-sessions', fmtInt(sum.sessions));
+    var sd = sum.sessionsDeltaPct;
+    setText('mkt-kpi-sessions-delta', sd == null || !isFinite(sd) ? 'vs prior 28d' : (sd >= 0 ? '+' : '') + Number(sd).toFixed(1) + '% vs prior');
+    setText('mkt-kpi-newusers', fmtInt(sum.newUsers));
+    var nd = sum.newUsersDeltaPct;
+    setText('mkt-kpi-newusers-delta', nd == null || !isFinite(nd) ? '—' : (nd >= 0 ? '+' : '') + Number(nd).toFixed(1) + '%');
+    setText('mkt-kpi-cvr', fmtGa4Pct(sum.conversionRate));
+    setText('mkt-kpi-engagement', sum.engagementRate != null && isFinite(Number(sum.engagementRate)) ? (Number(sum.engagementRate) * 100).toFixed(1) + '%' : '—');
+    var avgSec = Number(sum.avgSessionDuration);
+    setText('mkt-kpi-avg-duration', isFinite(avgSec) && avgSec > 0 ? Math.round(avgSec) + 's avg' : '—');
+    var leadSum = projects.reduce(function (a, p) {
+      return a + (Number(p && p.leadsGenerated) || 0);
+    }, 0);
+    setText('mkt-kpi-leads', fmtInt(leadSum));
+    setText('mkt-kpi-topchannel', sum.topChannel || '—');
+    setText('mkt-kpi-cpl', sum.costPerLead != null && isFinite(Number(sum.costPerLead)) ? 'CPL ' + fmtCurrency(sum.costPerLead) : 'CPL: set ad spend in settings');
+
+    var camps = Array.isArray(data.topCampaigns) ? data.topCampaigns : [];
+    var tbl = $('mk-top-campaigns-table');
+    var tb = $('mk-top-campaigns-body');
+    var empty = $('mk-top-campaigns-empty');
+    if (tb) {
+      if (!camps.length) {
+        tb.innerHTML = '';
+        if (tbl) tbl.style.display = 'none';
+        if (empty) empty.style.display = 'block';
+      } else {
+        if (empty) empty.style.display = 'none';
+        if (tbl) tbl.style.display = 'table';
+        tb.innerHTML = camps
+          .map(function (row) {
+            return (
+              '<tr><td>' +
+              esc(row.campaign || '') +
+              '</td><td style="font-variant-numeric:tabular-nums;">' +
+              fmtInt(row.sessions) +
+              '</td></tr>'
+            );
+          })
+          .join('');
+      }
+    }
+
+    var lineCanvas = $('mk-dash-line');
+    var series = Array.isArray(data.sessionsByDayChannel) ? data.sessionsByDayChannel : [];
+    var dates = [];
+    series.forEach(function (r) {
+      var d = String(r.date || '');
+      if (d && dates.indexOf(d) === -1) dates.push(d);
+    });
+    dates.sort();
+    var chans = [];
+    series.forEach(function (r) {
+      var ch = String(r.channel || 'Other');
+      if (chans.indexOf(ch) === -1) chans.push(ch);
+    });
+    var mat = dates.map(function () {
+      var o = {};
+      chans.forEach(function (c) {
+        o[c] = 0;
+      });
+      return o;
+    });
+    series.forEach(function (r) {
+      var di = dates.indexOf(String(r.date || ''));
+      if (di === -1) return;
+      var ch = String(r.channel || 'Other');
+      mat[di][ch] = (mat[di][ch] || 0) + (Number(r.sessions) || 0);
+    });
+    var PAL = ['#111111', '#16a34a', '#2563eb', '#ea580c', '#9333ea', '#0d9488', '#ca8a04', '#db2777'];
+    var ds = chans.map(function (ch, i) {
+      return {
+        label: ch,
+        data: mat.map(function (row) {
+          return row[ch] || 0;
+        }),
+        stack: 's',
+        backgroundColor: PAL[i % PAL.length],
+        borderColor: PAL[i % PAL.length],
+        borderWidth: 1,
+      };
+    });
+    if (lineCanvas && window.Chart) {
+      if (mkDashLineChart) mkDashLineChart.destroy();
+      mkDashLineChart = new Chart(lineCanvas, {
+        type: 'bar',
+        data: { labels: dates, datasets: ds },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true, beginAtZero: true },
+          },
+          plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+
+    var barCanvas = $('mk-dash-bar');
+    var lands = Array.isArray(data.landingPages) ? data.landingPages.slice(0, 8) : [];
+    var llabels = lands.map(function (x) {
+      return String(x.landingPage || '').slice(0, 42) || '—';
+    });
+    var lcvr = lands.map(function (x) {
+      return (Number(x.cvr) || 0) * 100;
+    });
+    if (barCanvas && window.Chart) {
+      if (mkDashBarChart) mkDashBarChart.destroy();
+      mkDashBarChart = new Chart(barCanvas, {
+        type: 'bar',
+        data: {
+          labels: llabels,
+          datasets: [
+            {
+              label: 'CVR %',
+              data: lcvr,
+              backgroundColor: '#111111',
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true } },
+        },
+      });
+    }
+    renderPersonableCards();
+  }
+
+  async function renderMarketingDashboard(force) {
+    if (!$('mkt-kpi-sessions')) return;
+    var dashPg = $('page-dashboard');
+    if (!force && dashPg && !dashPg.classList.contains('on')) return;
+    var orgId = getCurrentOrgId();
+    var st = $('mkt-ga4-status');
+    if (!orgId && !isDemoDashboardUser()) {
+      if (st) {
+        st.textContent = 'Select a workspace to load GA4.';
+        st.style.color = 'var(--text3)';
+      }
+      return;
+    }
+    if (isDemoDashboardUser()) {
+      var dTok = ++marketingDashFetchToken;
+      var demoData = buildMarketingDemoGa4DashboardData();
+      if (dTok !== marketingDashFetchToken) return;
+      lastMarketingGa4Dashboard = demoData;
+      marketingGa4State.orgId = orgId || '';
+      marketingGa4State.loaded = true;
+      marketingGa4State.error = '';
+      if (st) {
+        st.textContent = orgId ? 'Demo GA4 snapshot · illustrative data' : 'Demo GA4 snapshot · pick a workspace for live GA4';
+        st.style.color = 'var(--green)';
+      }
+      paintMarketingGa4DashboardFromData(demoData);
+      return;
+    }
+    var token = ++marketingDashFetchToken;
+    if (st) {
+      st.textContent = 'Loading GA4…';
+      st.style.color = 'var(--text3)';
+    }
+    var r = await fetchMarketingGa4Report('dashboard');
+    if (token !== marketingDashFetchToken) return;
+    marketingGa4State.orgId = orgId;
+    if (!r.ok && r.configured !== true && r.configured !== false) {
+      if (st) {
+        st.textContent = r.error || 'Unavailable';
+        st.style.color = 'var(--red)';
+      }
+      return;
+    }
+    if (r.configured === false) {
+      if (st) {
+        st.textContent = r.reason || 'GA4 is not configured.';
+        st.style.color = 'var(--amber)';
+      }
+      lastMarketingGa4Dashboard = null;
+      return;
+    }
+    if (r.error) {
+      if (st) {
+        st.textContent = String(r.error) + (r.details ? ' ' + String(r.details).slice(0, 200) : '');
+        st.style.color = 'var(--red)';
+      }
+      return;
+    }
+    var data = r.data || {};
+    lastMarketingGa4Dashboard = data;
+    if (st) {
+      st.textContent = r.cached ? 'GA4 (cached, up to 1h)' : 'GA4 · last 28 days';
+      st.style.color = 'var(--green)';
+    }
+    paintMarketingGa4DashboardFromData(data);
+  }
+
+  function renderReportsActiveTab() {
+    var body = $('reports-tab-body');
+    var st = $('reports-tab-status');
+    if (!body || !st) return;
+    st.textContent = 'Loading…';
+    body.innerHTML = '';
+    var tab = reportsActiveTab || 'channel_performance';
+    fetchMarketingGa4Report(tab).then(function (r) {
+      if (!r.ok && r.configured !== true && r.configured !== false) {
+        st.textContent = r.error || 'Failed';
+        return;
+      }
+      if (r.configured === false) {
+        st.textContent = r.reason || 'Not configured';
+        return;
+      }
+      if (r.error) {
+        st.textContent = String(r.error) + (r.details ? ' ' + String(r.details).slice(0, 300) : '');
+        return;
+      }
+      st.textContent = (r.cached ? 'Cached (≤1h) · ' : 'Fresh · ') + tab;
+      var d = r.data || {};
+      if (tab === 'channel_performance' && Array.isArray(d.rows)) {
+        body.innerHTML =
+          '<table class="dt"><thead><tr><th>Source</th><th>Medium</th><th>Sessions</th><th>New users</th><th>Conversions</th><th>CVR</th></tr></thead><tbody>' +
+          d.rows
+            .map(function (row) {
+              return (
+                '<tr><td>' +
+                esc(row.sessionSource) +
+                '</td><td>' +
+                esc(row.sessionMedium) +
+                '</td><td>' +
+                fmtInt(row.sessions) +
+                '</td><td>' +
+                fmtInt(row.newUsers) +
+                '</td><td>' +
+                fmtInt(row.conversions) +
+                '</td><td>' +
+                fmtGa4Pct(row.cvr) +
+                '</td></tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table>';
+      } else if (tab === 'audience') {
+        body.innerHTML =
+          '<div style="margin-bottom:12px;font-weight:600;">Devices</div>' +
+          '<table class="dt"><thead><tr><th>Device</th><th>Sessions</th><th>New users</th></tr></thead><tbody>' +
+          (Array.isArray(d.devices)
+            ? d.devices
+                .map(function (row) {
+                  return (
+                    '<tr><td>' +
+                    esc(row.deviceCategory) +
+                    '</td><td>' +
+                    fmtInt(row.sessions) +
+                    '</td><td>' +
+                    fmtInt(row.newUsers) +
+                    '</td></tr>'
+                  );
+                })
+                .join('')
+            : '') +
+          '</tbody></table>' +
+          '<div style="margin:18px 0 12px;font-weight:600;">Top cities</div>' +
+          '<table class="dt"><thead><tr><th>City</th><th>Sessions</th></tr></thead><tbody>' +
+          (Array.isArray(d.topCities)
+            ? d.topCities
+                .map(function (row) {
+                  return '<tr><td>' + esc(row.city) + '</td><td>' + fmtInt(row.sessions) + '</td></tr>';
+                })
+                .join('')
+            : '') +
+          '</tbody></table>';
+      } else if (tab === 'campaign_roi') {
+        var rows = Array.isArray(d.ga4Campaigns) ? d.ga4Campaigns : [];
+        body.innerHTML =
+          '<table class="dt"><thead><tr><th>Campaign (GA4)</th><th>Sessions</th><th>Conversions</th><th>CVR</th></tr></thead><tbody>' +
+          rows
+            .map(function (row) {
+              return (
+                '<tr><td>' +
+                esc(row.campaignName) +
+                '</td><td>' +
+                fmtInt(row.sessions) +
+                '</td><td>' +
+                fmtInt(row.conversions) +
+                '</td><td>' +
+                fmtGa4Pct(row.cvr) +
+                '</td></tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table>' +
+          '<p style="margin-top:12px;color:var(--text3);font-size:12px;">Pair with workspace campaign budgets on the Campaigns page for CPL.</p>';
+      } else if (tab === 'attribution') {
+        body.innerHTML =
+          '<div style="margin-bottom:12px;font-weight:600;">UTM / campaign paths</div>' +
+          '<table class="dt"><thead><tr><th>Campaign</th><th>Source</th><th>Medium</th><th>Sessions</th><th>Conversions</th><th>CVR</th></tr></thead><tbody>' +
+          (Array.isArray(d.utmCampaigns)
+            ? d.utmCampaigns
+                .map(function (row) {
+                  return (
+                    '<tr><td>' +
+                    esc(row.campaign) +
+                    '</td><td>' +
+                    esc(row.source) +
+                    '</td><td>' +
+                    esc(row.medium) +
+                    '</td><td>' +
+                    fmtInt(row.sessions) +
+                    '</td><td>' +
+                    fmtInt(row.conversions) +
+                    '</td><td>' +
+                    fmtGa4Pct(row.cvr) +
+                    '</td></tr>'
+                  );
+                })
+                .join('')
+            : '') +
+          '</tbody></table>';
+      } else {
+        body.textContent = JSON.stringify(d).slice(0, 2000);
+      }
+    });
+  }
+
+  function wireReportsPage() {
+    if (reportsPageWired) return;
+    reportsPageWired = true;
+    document.querySelectorAll('.reports-tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var t = btn.getAttribute('data-reports-tab');
+        if (!t) return;
+        reportsActiveTab = t;
+        document.querySelectorAll('.reports-tab-btn').forEach(function (b) {
+          b.classList.toggle('on', b === btn);
+        });
+        renderReportsActiveTab();
+      });
+    });
+    var rf = $('btn-reports-refresh');
+    if (rf) {
+      rf.addEventListener('click', function () {
+        renderReportsActiveTab();
+      });
+    }
+  }
+
   var marketingGa4State = {
     orgId: '',
     loading: false,
@@ -6376,10 +6930,10 @@ var incomePowerState = {
     }
 
     var summary = payload.summary || {};
-    setGa4Value('ga4-users', fmtInt(summary.users));
+    setGa4Value('ga4-users', fmtInt(summary.totalUsers != null ? summary.totalUsers : summary.users));
     setGa4Value('ga4-sessions', fmtInt(summary.sessions));
     setGa4Value('ga4-new-users', fmtInt(summary.newUsers));
-    setGa4Value('ga4-page-views', fmtInt(summary.pageViews));
+    setGa4Value('ga4-page-views', fmtInt(summary.pageViews != null ? summary.pageViews : summary.screenPageViews));
     setGa4Value('ga4-conversions', fmtInt(summary.conversions));
 
     status.textContent = 'Connected to GA4';
@@ -6392,9 +6946,10 @@ var incomePowerState = {
     }
     channelsEl.innerHTML = channels
       .map(function (c) {
+        var lab = c.channel != null ? c.channel : c.source;
         return (
           '<span style="display:inline-block;margin-right:10px;margin-bottom:6px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:var(--bg3);">' +
-          esc(c.source || 'Unknown') + ': ' + fmtInt(c.sessions || 0) +
+          esc(lab || 'Unknown') + ': ' + fmtInt(c.sessions || 0) +
           '</span>'
         );
       })
@@ -6441,14 +6996,19 @@ var incomePowerState = {
           return;
         }
         var res = await supabase.functions.invoke('marketing-ga4', {
-          body: { organizationId: orgId },
+          body: { organizationId: orgId, reportKey: 'dashboard' },
           headers: { Authorization: 'Bearer ' + sess.access_token },
         });
         if (res.error) {
           marketingGa4State.error = res.error.message || 'Failed to load GA4 analytics.';
           return;
         }
-        marketingGa4State.data = res.data || null;
+        var raw = res.data || null;
+        if (raw && raw.data && typeof raw.data === 'object') {
+          marketingGa4State.data = Object.assign({}, raw, raw.data);
+        } else {
+          marketingGa4State.data = raw;
+        }
       } catch (err) {
         marketingGa4State.error = String(err && err.message ? err.message : err || 'Failed to load GA4 analytics.');
       } finally {
@@ -6724,13 +7284,17 @@ var incomePowerState = {
           csCell += '<div style="margin-top:4px;color:var(--text3);">—</div>';
         }
         csCell += '</div>';
+        var ch = (p.channel || '').trim() || (p.type || '—');
+        var bud = p.budget != null && !isNaN(p.budget) ? fmtCurrency(p.budget) : '—';
+        var lg = p.leadsGenerated != null && !isNaN(p.leadsGenerated) ? String(Math.round(p.leadsGenerated)) : '—';
         return '<tr>' +
           '<td class="tdp">' + (p.name || 'Untitled') + '</td>' +
           '<td>' + clientName + '</td>' +
-          '<td>' + (p.type || '—') + '</td>' +
+          '<td>' + esc(ch) + '</td>' +
           '<td>' + (p.description || '—') + '</td>' +
           '<td>' + (p.dueDate || '—') + '</td>' +
-          '<td>' + fmtCurrency(p.value || 0) + '</td>' +
+          '<td>' + bud + '</td>' +
+          '<td style="font-variant-numeric:tabular-nums;">' + lg + '</td>' +
           '<td style="min-width:140px;">' +
             '<select class="fi project-row-status" data-project-status-id="' + esc(p.id) + '" ' +
             'style="width:100%;max-width:200px;box-sizing:border-box;">' +
@@ -7153,62 +7717,41 @@ var incomePowerState = {
   }
 
   function renderProjectKpisAndCharts() {
-    var totalDelivered = 0;
     var byType = {};
     var byMonth = {};
     var deliverMonthLatestDue = {};
-    var totalDurationDays = 0;
-    var durationCount = 0;
-    var onTimeCount = 0;
-    var completedCount = 0;
-    var totalSatisfaction = 0;
-    var satCount = 0;
+    var activeCount = 0;
+    var totalBudget = 0;
+    var totalLeads = 0;
 
     projects.forEach(function (p) {
+      if (!p || p.archived) return;
       var status = (p.status || '').toLowerCase();
-      var t = (p.type || 'Other').trim() || 'Other';
-      byType[t] = (byType[t] || 0) + 1;
+      if (status.indexOf('ended') === -1 && status.indexOf('complete') === -1) {
+        activeCount += 1;
+      }
+      var ch = ((p.channel || '').trim() || (p.type || 'Other').trim() || 'Other');
+      byType[ch] = (byType[ch] || 0) + 1;
+      totalBudget += Number(p.budget) || 0;
+      totalLeads += Number(p.leadsGenerated) || 0;
 
-      var due = p.dueDate ? new Date(p.dueDate) : null;
       var start = p.startDate ? new Date(p.startDate) : null;
-      if (due && !isNaN(due)) {
-        var key = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0');
+      if (start && !isNaN(start.getTime())) {
+        var key = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0');
         byMonth[key] = (byMonth[key] || 0) + 1;
-        var dueStr = (p.dueDate || '').trim();
-        if (dueStr && (!deliverMonthLatestDue[key] || dueStr > deliverMonthLatestDue[key])) {
-          deliverMonthLatestDue[key] = dueStr;
+        var sd = (p.startDate || '').trim().slice(0, 10);
+        if (sd && (!deliverMonthLatestDue[key] || sd > deliverMonthLatestDue[key])) {
+          deliverMonthLatestDue[key] = sd;
         }
-      }
-
-      if (status.indexOf('complete') !== -1) {
-        completedCount += 1;
-        totalDelivered += 1;
-        if (start && !isNaN(start) && due && !isNaN(due)) {
-          var days = Math.max(1, Math.round((due - start) / (1000 * 60 * 60 * 24)));
-          totalDurationDays += days;
-          durationCount += 1;
-        }
-        // For now treat all completed projects as on-time (no explicit actual completion date field)
-        onTimeCount += 1;
-      }
-
-      if (typeof p.satisfaction === 'number') {
-        totalSatisfaction += p.satisfaction;
-        satCount += 1;
       }
     });
 
-    // KPIs
-    setText('perf-kpi-1', String(totalDelivered));
+    setText('perf-kpi-1', String(activeCount));
+    setText('perf-kpi-2', fmtCurrency(totalBudget));
+    setText('perf-kpi-3', String(Math.round(totalLeads)));
 
-    var onTimeRate = completedCount ? Math.round((onTimeCount / completedCount) * 100) : null;
-    setText('perf-kpi-2', onTimeRate == null ? '—' : onTimeRate + '%');
-
-    var avgDuration = durationCount ? Math.round(totalDurationDays / durationCount) : null;
-    setText('perf-kpi-3', avgDuration == null ? '—' : avgDuration + ' days');
-
-    var avgSat = satCount ? Math.round(totalSatisfaction / satCount) : null;
-    setText('perf-kpi-4', avgSat == null ? '—' : avgSat + '/10');
+    var chanCount = Object.keys(byType).length;
+    setText('perf-kpi-4', chanCount ? String(chanCount) : '—');
 
     // Projects by Service Type chart (cSvc)
     var svcCanvas = document.getElementById('cSvc');
@@ -7370,29 +7913,327 @@ var incomePowerState = {
   }
 
   function computeClientKpis() {
-    var total = clients.length;
-    var activeRetainers = clients.filter(clientIsRetainer).length;
-    var totalRevenue = clients.reduce(function (sum, c) {
-      return sum + effectiveClientRevenue(c);
-    }, 0);
-    var avgValue = total ? totalRevenue / total : 0;
+    var list = clients.filter(clientIsAccountStage);
+    var total = list.length;
+    var notExported = list.filter(function (c) {
+      return c && (c.salesforceStatus || 'not_exported') === 'not_exported';
+    }).length;
+    var withUtm = list.filter(function (c) {
+      if (!c) return false;
+      return !!(String(c.utmSource || '').trim() || String(c.utmMedium || '').trim() || String(c.utmCampaign || '').trim());
+    }).length;
     return {
       total: total,
-      activeRetainers: activeRetainers,
-      avgValue: avgValue,
+      notExported: notExported,
+      withUtm: withUtm,
     };
   }
 
-  function applyCustomersColumnVisibility() {
-    var table = $('customers-table');
-    if (!table) return;
+  function computeLeadKpis() {
+    var list = clients.filter(clientIsLeadStage);
+    var total = list.length;
+    var notExported = list.filter(function (c) {
+      return c && (c.salesforceStatus || 'not_exported') === 'not_exported';
+    }).length;
+    var withUtm = list.filter(function (c) {
+      if (!c) return false;
+      return !!(String(c.utmSource || '').trim() || String(c.utmMedium || '').trim() || String(c.utmCampaign || '').trim());
+    }).length;
+    return {
+      total: total,
+      notExported: notExported,
+      withUtm: withUtm,
+    };
+  }
+
+  /** Filter client list by #customers-search (company, contact, email, status, industry, notes). */
+  function clientsMatchingSearch(list, rawQ) {
+    var q = String(rawQ || '')
+      .trim()
+      .toLowerCase();
+    if (!q) return list || [];
+    return (list || []).filter(function (c) {
+      if (!c) return false;
+      var hay = [
+        c.companyName,
+        c.contactName,
+        c.email,
+        c.phone,
+        c.status,
+        c.industry,
+        c.leadSource,
+        c.notes,
+        c.utmSource,
+        c.utmMedium,
+        c.utmCampaign,
+      ]
+        .map(function (x) {
+          return String(x || '').toLowerCase();
+        })
+        .join(' ');
+      return hay.indexOf(q) !== -1;
+    });
+  }
+
+  /**
+   * Split CRM roster: one underlying `clients` list, two views.
+   * Accounts = retainer flag, or status suggests an active/on-file customer.
+   * Leads = everything else (empty status, Pipeline, Prospect, etc.).
+   */
+  function clientIsAccountStage(c) {
+    if (!c) return false;
+    if (c.retainer === true) return true;
+    var s = String(c.status || '').toLowerCase();
+    if (!s.trim()) return false;
+    var markers = ['active', 'retainer', 'customer', 'engaged', 'on hold'];
+    var i;
+    for (i = 0; i < markers.length; i++) {
+      if (s.indexOf(markers[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  function clientIsLeadStage(c) {
+    return !!c && !clientIsAccountStage(c);
+  }
+
+  function buildClientDirectoryRowHtml(c) {
+    var pcount = clientProjectCount(c.id);
+    var companyText = c.companyName || '—';
+    var contactText = c.contactName || '—';
+    var emailText = c.email || '—';
+    var phoneText = c.phone || '—';
+    var indText = c.industry || '—';
+    var fu = (c.nextFollowUpAt || '').trim().slice(0, 10);
+    var fuLabel = fu;
+    if (fu.length === 10) {
+      var fd = parseDate(fu);
+      if (!isNaN(fd.getTime())) {
+        fuLabel = fd.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+    } else {
+      fuLabel = '—';
+    }
+    var sf = c.salesforceStatus || 'not_exported';
+    var sfOpts = ['not_exported', 'exported', 'synced']
+      .map(function (v) {
+        return '<option value="' + v + '"' + (sf === v ? ' selected' : '') + '>' + v.replace(/_/g, ' ') + '</option>';
+      })
+      .join('');
+    return (
+      '<tr data-salesforce-row="' +
+      esc(c.id) +
+      '" class="' +
+      (sf === 'exported' || sf === 'synced' ? 'lead-exported' : '') +
+      '">' +
+      '<td class="tdp td-truncate" title="' +
+      escAttr(companyText) +
+      '">' +
+      esc(companyText) +
+      '</td>' +
+      '<td class="td-truncate" title="' +
+      escAttr(contactText) +
+      '">' +
+      esc(contactText) +
+      '</td>' +
+      '<td class="td-truncate" title="' +
+      escAttr(emailText) +
+      '">' +
+      esc(emailText) +
+      '</td>' +
+      '<td class="td-truncate" title="' +
+      escAttr(phoneText) +
+      '">' +
+      esc(phoneText) +
+      '</td>' +
+      '<td>' +
+      esc(c.leadSource || '—') +
+      '</td>' +
+      '<td>' +
+      esc(c.utmSource || '—') +
+      '</td>' +
+      '<td>' +
+      esc(c.utmMedium || '—') +
+      '</td>' +
+      '<td class="td-truncate" title="' +
+      escAttr(String(c.utmCampaign || '')) +
+      '">' +
+      esc(c.utmCampaign || '—') +
+      '</td>' +
+      '<td>' +
+      esc(c.status || '—') +
+      (clientIsRetainer(c) ? ' <span style="font-size:10px;font-weight:600;color:var(--coral);white-space:nowrap;">Retainer</span>' : '') +
+      '</td>' +
+      '<td class="td-truncate" title="' +
+      escAttr(indText) +
+      '">' +
+      esc(indText) +
+      '</td>' +
+      '<td class="td-truncate" title="' +
+      escAttr(fu) +
+      '">' +
+      esc(fuLabel) +
+      '</td>' +
+      '<td>' +
+      (pcount ? String(pcount) : '—') +
+      '</td>' +
+      '<td><select class="fi lead-sf-status" data-client-sf="' +
+      esc(c.id) +
+      '" style="max-width:130px;">' +
+      sfOpts +
+      '</select></td>' +
+      '<td style="min-width:120px;">' +
+      '<div style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+      '<button type="button" class="btn" data-client-edit="' +
+      c.id +
+      '">Edit</button>' +
+      '<button type="button" class="btn" data-client-del="' +
+      c.id +
+      '" style="color:var(--red);">Delete</button>' +
+      '</div>' +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  /** Reminders + CRM events for the Clients page (and dashboard welcome context). */
+  function renderClientRelationshipPanels() {
+    var now = new Date();
+    var todayYmd = dateYMD(now);
+    var reminders = [];
+    clients.forEach(function (c) {
+      if (!c) return;
+      if (c.nextFollowUpAt) {
+        var fu = String(c.nextFollowUpAt).trim().slice(0, 10);
+        if (fu.length === 10 && fu < todayYmd) {
+          reminders.push({ client: c, text: 'Follow-up was due ' + fu });
+        }
+      }
+      if (!c.lastTouchAt) return;
+      var d = new Date(c.lastTouchAt + 'T12:00:00');
+      if (isNaN(d.getTime())) return;
+      var days = Math.floor((now - d) / 86400000);
+      if (days >= 30) reminders.push({ client: c, text: days + ' days since last outreach' });
+    });
+    var remEl = $('crm-reminders-list');
+    if (remEl) {
+      remEl.innerHTML = reminders.length
+        ? reminders
+            .slice(0, 6)
+            .map(function (r) {
+              return (
+                '<div class="kb bn" style="padding:8px 10px;background:var(--bg2);">' +
+                esc(r.client.companyName || 'Client') +
+                ': ' +
+                esc(r.text) +
+                '</div>'
+              );
+            })
+            .join('')
+        : '<div style="font-size:13px;color:var(--text3);">No overdue follow-ups right now.</div>';
+    }
+
+    var evEl = $('crm-events-timeline');
+    if (evEl) {
+      evEl.innerHTML = crmEvents.length
+        ? crmEvents
+            .slice(0, 12)
+            .map(function (ev) {
+              var when = ev.eventAt ? new Date(ev.eventAt).toLocaleDateString() : '—';
+              return (
+                '<div style="padding:8px 10px;border:1px solid var(--border);border-radius:10px;"><div style="font-size:12px;color:var(--text3);">' +
+                esc(when) +
+                ' • ' +
+                esc(ev.kind || 'event') +
+                '</div><div style="font-size:13px;color:var(--text2);">' +
+                esc(ev.title || '') +
+                '</div></div>'
+              );
+            })
+            .join('')
+        : '<div style="font-size:13px;color:var(--text3);">No timeline events yet. Log touchpoints from the client record (notes and dates).</div>';
+    }
+  }
+
+  /** Reminders + events scoped to pipeline leads (Leads page). */
+  function renderLeadPipelinePanels() {
+    var now = new Date();
+    var todayYmd = dateYMD(now);
+    var leadIds = {};
+    clients.forEach(function (c) {
+      if (c && c.id && clientIsLeadStage(c)) leadIds[c.id] = true;
+    });
+    var reminders = [];
+    clients.forEach(function (c) {
+      if (!c || !leadIds[c.id]) return;
+      if (c.nextFollowUpAt) {
+        var fu = String(c.nextFollowUpAt).trim().slice(0, 10);
+        if (fu.length === 10 && fu < todayYmd) {
+          reminders.push({ client: c, text: 'Follow-up was due ' + fu });
+        }
+      }
+      if (!c.lastTouchAt) return;
+      var d = new Date(c.lastTouchAt + 'T12:00:00');
+      if (isNaN(d.getTime())) return;
+      var days = Math.floor((now - d) / 86400000);
+      if (days >= 30) reminders.push({ client: c, text: days + ' days since last outreach' });
+    });
+    var remEl = $('leads-reminders-list');
+    if (remEl) {
+      remEl.innerHTML = reminders.length
+        ? reminders
+            .slice(0, 8)
+            .map(function (r) {
+              return (
+                '<div class="kb bn" style="padding:8px 10px;background:var(--bg2);">' +
+                esc(r.client.companyName || 'Lead') +
+                ': ' +
+                esc(r.text) +
+                '</div>'
+              );
+            })
+            .join('')
+        : '<div style="font-size:13px;color:var(--text3);">No reminders for pipeline leads.</div>';
+    }
+    var evEl = $('leads-events-timeline');
+    if (evEl) {
+      var leadEvents = (crmEvents || []).filter(function (ev) {
+        return ev && ev.clientId && leadIds[ev.clientId];
+      });
+      evEl.innerHTML = leadEvents.length
+        ? leadEvents
+            .slice(0, 12)
+            .map(function (ev) {
+              var when = ev.eventAt ? new Date(ev.eventAt).toLocaleDateString() : '—';
+              return (
+                '<div style="padding:8px 10px;border:1px solid var(--border);border-radius:10px;"><div style="font-size:12px;color:var(--text3);">' +
+                esc(when) +
+                ' • ' +
+                esc(ev.kind || 'event') +
+                '</div><div style="font-size:13px;color:var(--text2);">' +
+                esc(ev.title || '') +
+                '</div></div>'
+              );
+            })
+            .join('')
+        : '<div style="font-size:13px;color:var(--text3);">No events yet for leads on this list.</div>';
+    }
+  }
+
+  function applyClientDirectoryColumnVisibility(tableEl) {
+    if (!tableEl) return;
     CUSTOMERS_COLUMN_DEFS.forEach(function (col) {
       var show = col.locked ? true : customersColumnPrefs[col.id] !== false;
       var selector = 'thead th:nth-child(' + col.index + '), tbody td:nth-child(' + col.index + ')';
-      table.querySelectorAll(selector).forEach(function (cell) {
+      tableEl.querySelectorAll(selector).forEach(function (cell) {
         cell.style.display = show ? '' : 'none';
       });
     });
+  }
+
+  function applyCustomersColumnVisibility() {
+    applyClientDirectoryColumnVisibility($('customers-table'));
+    applyClientDirectoryColumnVisibility($('leads-table'));
   }
 
   function renderCustomersColumnsPanel() {
@@ -7456,58 +8297,93 @@ var incomePowerState = {
     var table = $('customers-table');
     if (!tbody) return;
 
+    var searchEl = $('customers-search');
+    var accounts = clients.filter(clientIsAccountStage);
+    var visible = clientsMatchingSearch(accounts, searchEl ? searchEl.value : '');
+
     if (!clients.length) {
       tbody.innerHTML = '';
-      if (empty) empty.style.display = 'block';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent = 'No people or companies yet. Use “Add client” or add a lead from the Leads page.';
+      }
+      if (table) table.style.display = 'none';
+    } else if (!accounts.length) {
+      tbody.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent =
+          'No client accounts yet — everyone is still under Leads in the sidebar. Set status to Active or check Retainer to move a record here.';
+      }
+      if (table) table.style.display = 'none';
+    } else if (!visible.length) {
+      tbody.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent = 'No clients match your search.';
+      }
       if (table) table.style.display = 'none';
     } else {
       if (empty) empty.style.display = 'none';
       if (table) table.style.display = 'table';
-      tbody.innerHTML = clients.map(function (c) {
-        var rev = effectiveClientRevenue(c);
-        var cost = effectiveClientAllocatedCost(c);
-        var pr = fmtProfitMarginRoi(rev, cost);
-        var profitStyle = 'font-variant-numeric:tabular-nums;';
-        if (pr.profit < 0) profitStyle += 'color:var(--red);';
-        else if (pr.profit > 0) profitStyle += 'color:var(--green);';
-        var pcount = clientProjectCount(c.id);
-        var revTitle = c.custTabRevenue != null ? ' title="Custom revenue — edit client to change"' : '';
-        var costTitle = c.custTabAllocatedCost != null ? ' title="Custom allocated cost — edit client to change"' : '';
-        var companyText = c.companyName || '—';
-        var contactText = c.contactName || '—';
-        var emailText = c.email || '—';
-        var phoneText = c.phone || '—';
-        return '<tr>' +
-          '<td class="tdp td-truncate" title="' + escAttr(companyText) + '">' + esc(companyText) + '</td>' +
-          '<td class="td-truncate" title="' + escAttr(contactText) + '">' + esc(contactText) + '</td>' +
-          '<td class="td-truncate" title="' + escAttr(emailText) + '">' + esc(emailText) + '</td>' +
-          '<td class="td-truncate" title="' + escAttr(phoneText) + '">' + esc(phoneText) + '</td>' +
-          '<td>' + esc(c.preferredChannel || '—') + '</td>' +
-          '<td>' + esc(c.communicationStyle || '—') + '</td>' +
-          '<td>' + esc(c.status || '—') +
-            (clientIsRetainer(c) ? ' <span style="font-size:10px;font-weight:600;color:var(--coral);white-space:nowrap;">Retainer</span>' : '') +
-          '</td>' +
-          '<td>' + (pcount ? String(pcount) : '—') + '</td>' +
-          '<td' + revTitle + ' style="font-variant-numeric:tabular-nums;">' + fmtCurrency(rev) + '</td>' +
-          '<td' + costTitle + ' style="font-variant-numeric:tabular-nums;">' + fmtCurrency(cost) + '</td>' +
-          '<td class="tdp" style="' + profitStyle + '">' + fmtCurrency(pr.profit) + '</td>' +
-          '<td>' + pr.marginStr + '</td>' +
-          '<td>' + pr.roiStr + '</td>' +
-          '<td style="min-width:120px;">' +
-            '<div style="display:flex;gap:6px;flex-wrap:nowrap;">' +
-              '<button type="button" class="btn" data-client-edit="' + c.id + '">Edit</button>' +
-              '<button type="button" class="btn" data-client-del="' + c.id + '" style="color:var(--red);">Delete</button>' +
-            '</div>' +
-          '</td>' +
-        '</tr>';
-      }).join('');
+      tbody.innerHTML = visible.map(buildClientDirectoryRowHtml).join('');
       applyCustomersColumnVisibility();
     }
 
     var k = computeClientKpis();
     setText('cust-kpi-1', String(k.total));
-    setText('cust-kpi-2', String(k.activeRetainers));
-    setText('cust-kpi-3', fmtCurrency(k.avgValue || 0));
+    setText('cust-kpi-2', String(k.notExported));
+    setText('cust-kpi-3', String(k.withUtm));
+  }
+
+  function renderLeads() {
+    var tbody = $('leads-tbody');
+    var empty = $('leads-empty');
+    var table = $('leads-table');
+    if (!tbody) return;
+
+    var searchEl = $('leads-search');
+    var leads = clients.filter(clientIsLeadStage);
+    var visible = clientsMatchingSearch(leads, searchEl ? searchEl.value : '');
+
+    if (!clients.length) {
+      tbody.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent = 'No leads yet. Use “Add lead” to capture a prospect.';
+      }
+      if (table) table.style.display = 'none';
+    } else if (!leads.length) {
+      tbody.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent =
+          'Pipeline is empty — every record is already an account on Clients, or add a new lead.';
+      }
+      if (table) table.style.display = 'none';
+    } else if (!visible.length) {
+      tbody.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent = 'No leads match your search.';
+      }
+      if (table) table.style.display = 'none';
+    } else {
+      if (empty) empty.style.display = 'none';
+      if (table) table.style.display = 'table';
+      tbody.innerHTML = visible.map(buildClientDirectoryRowHtml).join('');
+      applyCustomersColumnVisibility();
+    }
+
+    var lk = computeLeadKpis();
+    setText('lead-kpi-1', String(lk.total));
+    setText('lead-kpi-2', String(lk.notExported));
+    setText('lead-kpi-3', String(lk.withUtm));
+  }
+
+  function refreshCrmDirectoryViews() {
+    if ($('customers-tbody')) renderClients();
+    if ($('leads-tbody')) renderLeads();
   }
 
   function parseTimeInputToMinutes(raw) {
@@ -8875,7 +9751,7 @@ var incomePowerState = {
     var serviceLabel = tx && tx.description ? tx.description : 'Project consulting';
 
     return '' +
-      '<div style="max-width:860px;margin:0 auto;background:#fff;border-radius:16px;padding:54px 58px;color:#1f1f1f;font-family:\'Helvetica Now Pro Display Medium\',system-ui,-apple-system,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,0.08);">' +
+      '<div style="max-width:860px;margin:0 auto;background:#fff;border-radius:16px;padding:54px 58px;color:#111;font-family:\'DM Sans\',system-ui,-apple-system,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,0.08);">' +
         '<div style="display:flex;justify-content:space-between;gap:24px;margin-bottom:36px;">' +
           '<div>' +
             '<div style="font-size:42px;line-height:0.9;font-weight:700;letter-spacing:0.02em;margin-bottom:14px;">IDM</div>' +
@@ -10169,9 +11045,26 @@ var incomePowerState = {
       });
     }
 
-    var custTable = $('customers-table');
-    if (custTable) {
-      custTable.addEventListener('click', function (ev) {
+    function wireClientDirectoryTableHandlers(tableEl) {
+      if (!tableEl || tableEl.getAttribute('data-bizdash-crm-dir') === '1') return;
+      tableEl.setAttribute('data-bizdash-crm-dir', '1');
+      tableEl.addEventListener('change', async function (ev) {
+        var sel = ev.target.closest('.lead-sf-status');
+        if (!sel) return;
+        var id = sel.getAttribute('data-client-sf');
+        var v = sel.value;
+        var client = clients.find(function (x) { return x.id === id; });
+        if (!client) return;
+        client.salesforceStatus = v;
+        saveClients(clients);
+        supabase = window.supabaseClient || supabase;
+        currentUser = window.currentUser || currentUser;
+        if (supabase && currentUser && getCurrentOrgId()) {
+          await persistClientToSupabase(client, 'update');
+        }
+        refreshCrmDirectoryViews();
+      });
+      tableEl.addEventListener('click', function (ev) {
         var editBtn = ev.target.closest('[data-client-edit]');
         if (editBtn) {
           var editId = editBtn.getAttribute('data-client-edit');
@@ -10183,6 +11076,8 @@ var incomePowerState = {
           (async function () {
             await wfRefreshFromSupabase();
             populateClientIndustryDatalist();
+            var modalTitle = $('client-modal-title');
+            if (modalTitle) modalTitle.textContent = clientIsLeadStage(client) ? 'Edit lead' : 'Edit client';
             var hiddenId = $('client-edit-id');
             if (hiddenId) hiddenId.value = client.id;
             $('client-company').value = client.companyName || '';
@@ -10211,6 +11106,10 @@ var incomePowerState = {
             if ($('client-last-touch')) $('client-last-touch').value = client.lastTouchAt || '';
             if ($('client-next-follow-up')) $('client-next-follow-up').value = client.nextFollowUpAt || '';
             if ($('client-relationship-notes')) $('client-relationship-notes').value = client.relationshipNotes || '';
+            if ($('client-lead-source')) $('client-lead-source').value = client.leadSource || '';
+            if ($('client-utm-source')) $('client-utm-source').value = client.utmSource || '';
+            if ($('client-utm-medium')) $('client-utm-medium').value = client.utmMedium || '';
+            if ($('client-utm-campaign')) $('client-utm-campaign').value = client.utmCampaign || '';
             var cr = $('client-cust-revenue');
             var cc = $('client-cust-cost');
             if (cr) cr.value = client.custTabRevenue != null ? String(client.custTabRevenue) : '';
@@ -10249,12 +11148,14 @@ var incomePowerState = {
         if (confirm('Delete this client?')) {
           clients = clients.filter(function (c) { return c.id !== id; });
           saveClients(clients);
-          renderClients();
+          refreshCrmDirectoryViews();
           if (state.computed) renderInsights();
           deleteClientRemote(id);
         }
       });
     }
+    wireClientDirectoryTableHandlers($('customers-table'));
+    wireClientDirectoryTableHandlers($('leads-table'));
 
     var projTable = $('projects-table');
     if (projTable) {
@@ -10296,6 +11197,9 @@ var incomePowerState = {
           populateProjectStatusOptions();
           if (proj.status && $('project-status')) $('project-status').value = proj.status;
           $('project-category').value = proj.type || '';
+          if ($('project-channel')) $('project-channel').value = proj.channel || '';
+          if ($('project-budget')) $('project-budget').value = proj.budget != null ? String(proj.budget) : '';
+          if ($('project-leads-generated')) $('project-leads-generated').value = proj.leadsGenerated != null ? String(proj.leadsGenerated) : '';
           $('project-start').value = proj.startDate || '';
           $('project-due').value = proj.dueDate || '';
           $('project-value').value = proj.value != null ? String(proj.value) : '';
@@ -10631,7 +11535,99 @@ var incomePowerState = {
     }).join('');
   }
 
+  function splitContactNameForCsv(name) {
+    var s = String(name || '').trim();
+    if (!s) return { first: '', last: '' };
+    var parts = s.split(/\s+/);
+    if (parts.length === 1) return { first: parts[0], last: '' };
+    return { first: parts[0], last: parts.slice(1).join(' ') };
+  }
+
+  function exportLeadsPipelineCsv() {
+    var list = clients.filter(clientIsLeadStage);
+    if (!list.length) {
+      alert('No pipeline leads to export.');
+      return;
+    }
+    var rows = [['FirstName', 'LastName', 'Email', 'Company', 'Phone', 'LeadSource', 'Description']];
+    list.forEach(function (c) {
+      if (!c) return;
+      var nm = splitContactNameForCsv(c.contactName);
+      var desc = [c.notes, c.utmSource && 'utm_source=' + c.utmSource, c.utmMedium && 'utm_medium=' + c.utmMedium, c.utmCampaign && 'utm_campaign=' + c.utmCampaign]
+        .filter(Boolean)
+        .join(' | ');
+      rows.push([nm.first, nm.last, c.email || '', c.companyName || '', c.phone || '', c.leadSource || '', desc]);
+    });
+    function q(v) {
+      return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    }
+    var csv = rows
+      .map(function (r) {
+        return r.map(q).join(',');
+      })
+      .join('\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'leads-pipeline-export.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function exportLeadsSalesforceCsv() {
+    if (!clients.length) {
+      alert('No clients to export.');
+      return;
+    }
+    var rows = [['FirstName', 'LastName', 'Email', 'Company', 'Phone', 'LeadSource', 'Description']];
+    clients.forEach(function (c) {
+      if (!c) return;
+      var nm = splitContactNameForCsv(c.contactName);
+      var desc = [c.notes, c.utmSource && 'utm_source=' + c.utmSource, c.utmMedium && 'utm_medium=' + c.utmMedium, c.utmCampaign && 'utm_campaign=' + c.utmCampaign]
+        .filter(Boolean)
+        .join(' | ');
+      rows.push([nm.first, nm.last, c.email || '', c.companyName || '', c.phone || '', c.leadSource || '', desc]);
+    });
+    function q(v) {
+      return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    }
+    var csv = rows.map(function (r) {
+      return r.map(q).join(',');
+    }).join('\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'clients-salesforce-export.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   function wireClientForm() {
+    var exportPipelineBtn = $('btn-leads-pipeline-export-csv');
+    if (exportPipelineBtn && exportPipelineBtn.getAttribute('data-wired-lpe') !== '1') {
+      exportPipelineBtn.setAttribute('data-wired-lpe', '1');
+      exportPipelineBtn.addEventListener('click', exportLeadsPipelineCsv);
+    }
+    var exportLeadBtn = $('btn-leads-export-csv');
+    if (exportLeadBtn && exportLeadBtn.getAttribute('data-wired-le') !== '1') {
+      exportLeadBtn.setAttribute('data-wired-le', '1');
+      exportLeadBtn.addEventListener('click', exportLeadsSalesforceCsv);
+    }
+    var leadsSearch = $('leads-search');
+    if (leadsSearch && leadsSearch.getAttribute('data-wired-ls') !== '1') {
+      leadsSearch.setAttribute('data-wired-ls', '1');
+      leadsSearch.addEventListener('input', function () {
+        renderLeads();
+      });
+    }
+    var custSearch = $('customers-search');
+    if (custSearch && custSearch.getAttribute('data-wired-cs') !== '1') {
+      custSearch.setAttribute('data-wired-cs', '1');
+      custSearch.addEventListener('input', function () {
+        renderClients();
+      });
+    }
+
     var btnAddClient = $('btn-add-client');
     var btnClientSave = $('btn-client-save');
     var btnClientCancel = $('btn-client-cancel');
@@ -10639,11 +11635,13 @@ var incomePowerState = {
     function openClientModal() {
       var m = $('clientModal');
       if (!m) return;
+      var mt = $('client-modal-title');
+      if (mt) mt.textContent = 'Add client';
       var editId = $('client-edit-id');
       if (editId) editId.value = '';
       $('client-company').value = '';
       $('client-contact').value = '';
-      $('client-status').value = '';
+      $('client-status').value = 'Active';
       $('client-industry').value = '';
       $('client-email').value = '';
       $('client-phone').value = '';
@@ -10667,6 +11665,10 @@ var incomePowerState = {
       if ($('client-last-touch')) $('client-last-touch').value = '';
       if ($('client-next-follow-up')) $('client-next-follow-up').value = '';
       if ($('client-relationship-notes')) $('client-relationship-notes').value = '';
+      if ($('client-lead-source')) $('client-lead-source').value = '';
+      if ($('client-utm-source')) $('client-utm-source').value = '';
+      if ($('client-utm-medium')) $('client-utm-medium').value = '';
+      if ($('client-utm-campaign')) $('client-utm-campaign').value = '';
       var cr = $('client-cust-revenue');
       var cc = $('client-cust-cost');
       if (cr) cr.value = '';
@@ -10679,11 +11681,26 @@ var incomePowerState = {
       m.classList.add('on');
     }
 
+    function openLeadModal() {
+      openClientModal();
+      var mt = $('client-modal-title');
+      if (mt) mt.textContent = 'Add lead';
+      if ($('client-status')) $('client-status').value = 'Pipeline';
+    }
+
     function closeClientModal() {
       var m = $('clientModal');
       if (m) m.classList.remove('on');
     }
 
+    var btnAddLead = $('btn-add-lead');
+    if (btnAddLead) {
+      btnAddLead.addEventListener('click', async function () {
+        await wfRefreshFromSupabase();
+        openLeadModal();
+        wfFillClientPipelineSelect($('client-pipeline-stage'), null);
+      });
+    }
     if (btnAddClient) {
       btnAddClient.addEventListener('click', async function () {
         await wfRefreshFromSupabase();
@@ -10765,6 +11782,11 @@ var incomePowerState = {
               lastTouchAt: $('client-last-touch') ? $('client-last-touch').value : '',
               nextFollowUpAt: $('client-next-follow-up') ? $('client-next-follow-up').value : '',
               relationshipNotes: val('client-relationship-notes'),
+              leadSource: val('client-lead-source'),
+              utmSource: val('client-utm-source'),
+              utmMedium: val('client-utm-medium'),
+              utmCampaign: val('client-utm-campaign'),
+              salesforceStatus: c.salesforceStatus || 'not_exported',
               salutation: val('client-salutation'),
               firstName: firstName,
               lastName: lastName,
@@ -10789,7 +11811,7 @@ var incomePowerState = {
             return client;
           });
           saveClients(clients);
-          renderClients();
+          refreshCrmDirectoryViews();
           if (state.computed) renderInsights();
           if (supabase && currentUser && client) {
             var editSync = await persistClientToSupabase(client, 'update');
@@ -10798,7 +11820,7 @@ var incomePowerState = {
                 clients = JSON.parse(clientsSnapshot);
               } catch (_) {}
               saveClients(clients);
-              renderClients();
+              refreshCrmDirectoryViews();
               if (state.computed) renderInsights();
               alert('Could not update this client in the cloud. Your changes were reverted.\n\n' + (persistClientLastError || 'Check the browser console and Supabase RLS rules.'));
               return;
@@ -10825,6 +11847,11 @@ var incomePowerState = {
             lastTouchAt: $('client-last-touch') ? $('client-last-touch').value : '',
             nextFollowUpAt: $('client-next-follow-up') ? $('client-next-follow-up').value : '',
             relationshipNotes: val('client-relationship-notes'),
+            leadSource: val('client-lead-source'),
+            utmSource: val('client-utm-source'),
+            utmMedium: val('client-utm-medium'),
+            utmCampaign: val('client-utm-campaign'),
+            salesforceStatus: 'not_exported',
             salutation: val('client-salutation'),
             firstName: firstName,
             lastName: lastName,
@@ -10857,7 +11884,7 @@ var incomePowerState = {
           }
           clients.push(client);
           saveClients(clients);
-          renderClients();
+          refreshCrmDirectoryViews();
           if (state.computed) renderInsights();
           await runWorkflowDispatch({ kind: 'client_updated', before: null, after: wfCloneClientForWorkflow(client) });
         }
@@ -10869,6 +11896,8 @@ var incomePowerState = {
             addCrmEvent('follow_up', 'Follow-up scheduled for ' + (client.companyName || 'client'), { nextFollowUpAt: client.nextFollowUpAt }, client.id, 'followup:' + client.id + ':' + client.nextFollowUpAt);
           }
         }
+        renderLeadPipelinePanels();
+        renderPersonableCards();
         refreshCloudSyncStatus();
         populateProjectClientOptions();
         populateIncomeClientOptions();
@@ -10991,6 +12020,9 @@ var incomePowerState = {
       $('project-client').value = '';
       $('project-status').value = '';
       $('project-category').value = '';
+      if ($('project-channel')) $('project-channel').value = '';
+      if ($('project-budget')) $('project-budget').value = '';
+      if ($('project-leads-generated')) $('project-leads-generated').value = '';
       $('project-start').value = '';
       $('project-due').value = '';
       $('project-value').value = '';
@@ -11037,12 +12069,15 @@ var incomePowerState = {
       btnProjectSave.addEventListener('click', function () {
         var name = $('project-name').value.trim();
         if (!name) {
-          alert('Project name is required.');
+          alert('Campaign name is required.');
           return;
         }
         var clientId = $('project-client').value || '';
         var statusVal = $('project-status').value || '';
         var type = $('project-category').value.trim();
+        var channel = $('project-channel') ? $('project-channel').value.trim() : '';
+        var budget = parseFloat(($('project-budget') && $('project-budget').value) || '') || 0;
+        var leadsGen = parseInt(String($('project-leads-generated') && $('project-leads-generated').value || '').trim(), 10) || 0;
         var start = $('project-start').value || '';
         var due = $('project-due').value || '';
         var value = parseFloat(($('project-value').value || '').trim()) || 0;
@@ -11065,6 +12100,9 @@ var incomePowerState = {
               clientId: clientId || null,
               status: statusVal,
               type: type,
+              channel: channel,
+              budget: budget,
+              leadsGenerated: leadsGen,
               startDate: start,
               dueDate: due,
               value: value,
@@ -11088,6 +12126,9 @@ var incomePowerState = {
             clientId: clientId || null,
             status: statusVal,
             type: type,
+            channel: channel,
+            budget: budget,
+            leadsGenerated: leadsGen,
             startDate: start,
             dueDate: due,
             value: value,
@@ -11108,6 +12149,12 @@ var incomePowerState = {
         saveProjects(projects);
         if (savedProject) persistProjectToSupabase(savedProject);
         renderProjects();
+        if ($('mkt-kpi-leads')) {
+          var leadSum2 = projects.reduce(function (a, p) {
+            return a + (Number(p && p.leadsGenerated) || 0);
+          }, 0);
+          setText('mkt-kpi-leads', fmtInt(leadSum2));
+        }
         if (state.computed) renderInsights();
         closeProjectModal();
       });
@@ -11237,35 +12284,22 @@ var incomePowerState = {
       // Re-scope budgets to the active account (in-memory `budgets` can still hold demo values after View Demo).
       budgets = loadBudgets();
 
-      // Start from local cache so we can migrate/backfill if remote is empty.
-      state.transactions = omitLocallyDeletedTransactions(loadTransactions());
+      // Marketing build: skip ledger, invoices, legacy campaigns table, and timesheet in the browser.
+      state.transactions = [];
       clients = loadClients();
       projects = loadProjects();
-      invoices = loadInvoices();
-      campaigns = loadCampaigns();
-      timesheetEntries = loadTimesheetEntries();
+      invoices = [];
+      campaigns = [];
+      timesheetEntries = [];
       projectStatuses = loadStatuses();
       normalizeLocalIdsForSupabase();
 
       if (supabase && currentUser && getCurrentOrgId() && !isDemoDashboardUser()) {
-        var remoteTxs = await fetchTransactionsFromSupabase();
         var remoteClients = await fetchClientsFromSupabase();
 
-        // One-time backfill: if remote is empty but local has data, upload local records.
-        if (!isScreenshotNoCloudUpload() && !remoteTxs.length && state.transactions.length) {
-          await uploadTransactionsToSupabase(state.transactions);
-          remoteTxs = await fetchTransactionsFromSupabase();
-        }
         if (!isScreenshotNoCloudUpload() && !remoteClients.length && clients.length) {
           await uploadClientsToSupabase(clients);
           remoteClients = await fetchClientsFromSupabase();
-        }
-
-        // Prefer remote when available; otherwise keep local fallback.
-        if (remoteTxs.length) {
-          state.transactions = mergeTransactionsPreserveRecurrence(state.transactions, remoteTxs);
-          state.transactions = omitLocallyDeletedTransactions(state.transactions);
-          pruneDeletedTxMarksAbsentFromRemote(remoteTxs);
         }
 
         var remoteClientIdSet = {};
@@ -11291,32 +12325,6 @@ var incomePowerState = {
           projects = mergeRemoteWithLocalOrphans(projects, remoteProjects, function (x) { return x; });
         }
 
-        var remoteInvoices = await fetchInvoicesFromSupabase();
-        if (!isScreenshotNoCloudUpload() && !remoteInvoices.length && invoices.length) {
-          await uploadInvoicesToSupabase(invoices);
-          remoteInvoices = await fetchInvoicesFromSupabase();
-        }
-        if (remoteInvoices.length) {
-          invoices = mergeRemoteWithLocalOrphans(invoices, remoteInvoices, function (x) { return x; });
-        }
-
-        var remoteCampaigns = await fetchCampaignsFromSupabase();
-        if (!isScreenshotNoCloudUpload() && !remoteCampaigns.length && campaigns.length) {
-          await uploadCampaignsToSupabase(campaigns);
-          remoteCampaigns = await fetchCampaignsFromSupabase();
-        }
-        if (remoteCampaigns.length) {
-          campaigns = mergeRemoteWithLocalOrphans(campaigns, remoteCampaigns, function (x) { return x; });
-        }
-
-        var remoteTimesheet = await fetchTimesheetEntriesFromSupabase();
-        if (!isScreenshotNoCloudUpload() && !remoteTimesheet.length && timesheetEntries.length) {
-          await uploadTimesheetEntriesToSupabase(timesheetEntries);
-          remoteTimesheet = await fetchTimesheetEntriesFromSupabase();
-        }
-        if (remoteTimesheet.length) {
-          timesheetEntries = mergeRemoteWithLocalOrphans(timesheetEntries, remoteTimesheet, function (x) { return x; });
-        }
         crmEvents = await fetchCrmEventsFromSupabase();
         weeklySummaries = await fetchWeeklySummariesFromSupabase();
 
@@ -11331,20 +12339,14 @@ var incomePowerState = {
           await persistAppSettingsToSupabase();
         }
 
-        // Cache in localStorage so existing browser keeps a copy.
-        saveTransactions(state.transactions);
         saveClients(clients);
         saveProjects(projects);
-        saveInvoices(invoices);
-        saveCampaigns(campaigns);
-        saveTimesheetEntries(timesheetEntries);
       }
 
       await wfRefreshFromSupabase();
 
       expandRecurringExpenseInstances();
 
-      // Ensure dropdowns reflect latest clients/projects.
       populateProjectClientOptions();
       populateIncomeClientOptions();
       populateProjectStatusOptions();
@@ -11355,13 +12357,12 @@ var incomePowerState = {
       refreshCloudSyncStatus();
     } catch (err) {
       console.error('initDataFromSupabase error', err);
-      // Fallback in case anything goes wrong.
-      state.transactions = omitLocallyDeletedTransactions(loadTransactions());
+      state.transactions = [];
       clients = loadClients();
       projects = loadProjects();
-      invoices = loadInvoices();
-      campaigns = loadCampaigns();
-      timesheetEntries = loadTimesheetEntries();
+      invoices = [];
+      campaigns = [];
+      timesheetEntries = [];
       projectStatuses = loadStatuses();
       crmEvents = [];
       weeklySummaries = [];
@@ -11431,14 +12432,14 @@ var incomePowerState = {
 
     var now = Date.now();
     projects = [
-      { id: uuid(), clientId: clients[0].id, name: 'Analytics refresh & dashboards', status: 'In progress', type: 'Retainer', startDate: ymdOffset(60), dueDate: ymdOffset(-5), value: 42000, description: 'BI dashboards and weekly KPI pack.', notes: '', satisfaction: 9, archived: false, createdAt: now - 86400000 * 55, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
-      { id: uuid(), clientId: clients[1].id, name: 'Member portal v2', status: 'In progress', type: 'Project', startDate: ymdOffset(45), dueDate: ymdOffset(20), value: 68000, description: 'Accessibility and performance pass.', notes: '', satisfaction: null, archived: false, createdAt: now - 86400000 * 40, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
-      { id: uuid(), clientId: clients[2].id, name: 'Loyalty program launch', status: 'Complete', type: 'Campaign', startDate: ymdOffset(90), dueDate: ymdOffset(25), value: 18500, description: 'Email and in-store signage.', notes: 'Delivered on time.', satisfaction: 10, archived: false, createdAt: now - 86400000 * 88, caseStudyPublished: true, caseStudyChallenge: 'Low repeat visits.', caseStudyStrategy: [{ title: 'Approach', body: 'Segmented offers.' }], caseStudyResults: [{ metric: 'Repeat rate', value: '+18%' }], caseStudyCategory: 'Hospitality' },
-      { id: uuid(), clientId: clients[3].id, name: 'Brand system 2026', status: 'In progress', type: 'Retainer', startDate: ymdOffset(30), dueDate: ymdOffset(45), value: 24000, description: 'Typography and component library.', notes: '', satisfaction: 8, archived: false, createdAt: now - 86400000 * 28, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
-      { id: uuid(), clientId: clients[4].id, name: 'Inventory forecasting', status: 'Blocked', type: 'Sprint', startDate: ymdOffset(20), dueDate: ymdOffset(5), value: 12000, description: 'Waiting on ERP export format.', notes: '', satisfaction: null, archived: false, createdAt: now - 86400000 * 18, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
-      { id: uuid(), clientId: clients[5].id, name: 'Fleet dashboard MVP', status: 'Not started', type: 'MVP', startDate: ymdOffset(10), dueDate: ymdOffset(55), value: 95000, description: 'Phase 0 discovery.', notes: '', satisfaction: null, archived: false, createdAt: now - 86400000 * 8, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
-      { id: uuid(), clientId: clients[7].id, name: 'LP reporting templates', status: 'Complete', type: 'Project', startDate: ymdOffset(75), dueDate: ymdOffset(40), value: 31000, description: 'Quarterly LP pack automation.', notes: '', satisfaction: 9, archived: false, createdAt: now - 86400000 * 70, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
-      { id: uuid(), clientId: clients[9].id, name: 'Course CMS migration', status: 'In progress', type: 'Project', startDate: ymdOffset(14), dueDate: ymdOffset(30), value: 52000, description: 'Headless CMS and SSO.', notes: '', satisfaction: 8, archived: false, createdAt: now - 86400000 * 12, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[0].id, name: 'Analytics refresh & dashboards', status: 'In progress', type: 'Retainer', channel: 'Retainer', budget: 8500, leadsGenerated: 18, startDate: '2026-01-08', dueDate: ymdOffset(-5), value: 42000, description: 'BI dashboards and weekly KPI pack.', notes: '', satisfaction: 9, archived: false, createdAt: now - 86400000 * 55, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[1].id, name: 'Member portal v2', status: 'In progress', type: 'Project', channel: 'Project', budget: 22000, leadsGenerated: 34, startDate: '2026-02-12', dueDate: ymdOffset(20), value: 68000, description: 'Accessibility and performance pass.', notes: '', satisfaction: null, archived: false, createdAt: now - 86400000 * 40, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[2].id, name: 'Loyalty program launch', status: 'Complete', type: 'Campaign', channel: 'Campaign', budget: 4200, leadsGenerated: 12, startDate: '2026-03-03', dueDate: ymdOffset(25), value: 18500, description: 'Email and in-store signage.', notes: 'Delivered on time.', satisfaction: 10, archived: false, createdAt: now - 86400000 * 88, caseStudyPublished: true, caseStudyChallenge: 'Low repeat visits.', caseStudyStrategy: [{ title: 'Approach', body: 'Segmented offers.' }], caseStudyResults: [{ metric: 'Repeat rate', value: '+18%' }], caseStudyCategory: 'Hospitality' },
+      { id: uuid(), clientId: clients[3].id, name: 'Brand system 2026', status: 'In progress', type: 'Retainer', channel: 'Retainer', budget: 12000, leadsGenerated: 21, startDate: '2026-01-22', dueDate: ymdOffset(45), value: 24000, description: 'Typography and component library.', notes: '', satisfaction: 8, archived: false, createdAt: now - 86400000 * 28, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[4].id, name: 'Inventory forecasting', status: 'Blocked', type: 'Sprint', channel: 'Sprint', budget: 6000, leadsGenerated: 8, startDate: '2026-04-01', dueDate: ymdOffset(5), value: 12000, description: 'Waiting on ERP export format.', notes: '', satisfaction: null, archived: false, createdAt: now - 86400000 * 18, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[5].id, name: 'Fleet dashboard MVP', status: 'Not started', type: 'MVP', channel: 'MVP', budget: 15000, leadsGenerated: 15, startDate: '2026-04-10', dueDate: ymdOffset(55), value: 95000, description: 'Phase 0 discovery.', notes: '', satisfaction: null, archived: false, createdAt: now - 86400000 * 8, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[7].id, name: 'LP reporting templates', status: 'Complete', type: 'Project', channel: 'Project', budget: 8000, leadsGenerated: 14, startDate: '2026-02-28', dueDate: ymdOffset(40), value: 31000, description: 'Quarterly LP pack automation.', notes: '', satisfaction: 9, archived: false, createdAt: now - 86400000 * 70, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
+      { id: uuid(), clientId: clients[9].id, name: 'Course CMS migration', status: 'In progress', type: 'Project', channel: 'Project', budget: 18000, leadsGenerated: 28, startDate: '2026-03-18', dueDate: ymdOffset(30), value: 52000, description: 'Headless CMS and SSO.', notes: '', satisfaction: 8, archived: false, createdAt: now - 86400000 * 12, caseStudyPublished: false, caseStudyChallenge: '', caseStudyStrategy: [], caseStudyResults: [], caseStudyCategory: '' },
     ];
 
     var txs = [];
@@ -11622,6 +12623,10 @@ var incomePowerState = {
     insTrendChart = null;
     kill(retTrendChart);
     retTrendChart = null;
+    kill(mkDashLineChart);
+    mkDashLineChart = null;
+    kill(mkDashBarChart);
+    mkDashBarChart = null;
   }
 
   function clearRuntimeDataForAuthChange(nextUser) {
@@ -11648,6 +12653,8 @@ var incomePowerState = {
     wfRules = [];
     wfTasks = [];
     advisorContactContext = null;
+    reportsPageWired = false;
+    lastMarketingGa4Dashboard = null;
     state.transactions = [];
     clients = [];
     projects = [];
@@ -11683,9 +12690,35 @@ var incomePowerState = {
       out.push({
         companyName: String(c.companyName || '').slice(0, 120),
         email: String(c.email || '').slice(0, 160),
+        crmStage: clientIsLeadStage(c) ? 'lead' : 'client',
+        status: String(c.status || ''),
+        leadSource: String(c.leadSource || ''),
+        utmSource: String(c.utmSource || ''),
+        utmMedium: String(c.utmMedium || ''),
+        utmCampaign: String(c.utmCampaign || ''),
+        salesforceStatus: String(c.salesforceStatus || ''),
       });
     });
     return out;
+  };
+  window.bizDashGetGa4SummaryForAdvisor = function () {
+    return lastMarketingGa4Dashboard && lastMarketingGa4Dashboard.summary ? lastMarketingGa4Dashboard.summary : null;
+  };
+  window.bizDashGetGa4ChannelsSliceForAdvisor = function () {
+    var d = lastMarketingGa4Dashboard;
+    return d && Array.isArray(d.channels) ? d.channels.slice(0, 12) : [];
+  };
+  window.bizDashGetCampaignsSnapshotForAdvisor = function () {
+    return (projects || []).slice(0, 40).map(function (p) {
+      if (!p) return null;
+      return {
+        name: String(p.name || ''),
+        status: String(p.status || ''),
+        channel: String(p.channel || p.type || ''),
+        budget: p.budget,
+        leadsGenerated: p.leadsGenerated,
+      };
+    }).filter(Boolean);
   };
   /**
    * One-click insert from Advisor CRM proposal (user must confirm in Advisor UI before calling).
@@ -11710,7 +12743,7 @@ var incomePowerState = {
     }
     clients.push(client);
     saveClients(clients);
-    renderClients();
+    refreshCrmDirectoryViews();
     if (state.computed) renderInsights();
     await runWorkflowDispatch({ kind: 'client_updated', before: null, after: wfCloneClientForWorkflow(client) });
     if (client.lastTouchAt) {
@@ -11745,7 +12778,7 @@ var incomePowerState = {
     if (orr && payload.ownerRole != null) orr.value = String(payload.ownerRole);
     if (tg && payload.tagline != null) tg.value = String(payload.tagline);
     if (payload.accent) {
-      var hex = normalizeHexColor(payload.accent, '#e8501a');
+      var hex = normalizeHexColor(payload.accent, '#d4f542');
       if (ac) ac.value = hex;
       if (ach) ach.value = hex;
       applyAccentBranding(hex);
@@ -12139,6 +13172,17 @@ var incomePowerState = {
 
   function init() {
     state.filter = { mode: 'all', start: null, end: null };
+    try {
+      var acPick = document.getElementById('setting-accent');
+      var acHex = document.getElementById('setting-accent-hex');
+      var initialAccent =
+        (acHex && acHex.value && parseAccentHexOrNull(acHex.value)) ||
+        (acPick && acPick.value && normalizeHexColor(acPick.value, '#d4f542')) ||
+        '#d4f542';
+      applyAccentBranding(initialAccent);
+    } catch (e) {
+      applyAccentBranding('#d4f542');
+    }
     wireTransactionForm();
     wireCsvImportAndJournalExport();
     wireIncomeExpenseForms();
@@ -12155,7 +13199,15 @@ var incomePowerState = {
     wireSettingsSave();
     wirePersonableActions();
     wireCloudSyncPanel();
-    wireMarketingCampaign();
+    wireReportsPage();
+    var ga4Refresh = $('btn-mkt-refresh-ga4');
+    if (ga4Refresh && ga4Refresh.getAttribute('data-wired') !== '1') {
+      ga4Refresh.setAttribute('data-wired', '1');
+      ga4Refresh.addEventListener('click', function () {
+        marketingDashFetchToken += 1;
+        renderMarketingDashboard(true);
+      });
+    }
     wireWorkflowAutomation();
     if (typeof window.wireDashboardAssistant === 'function') {
       window.wireDashboardAssistant();
@@ -12196,21 +13248,38 @@ var incomePowerState = {
       var mobileTitle = document.getElementById('mobile-title');
       if (mobileTitle) {
         var titles = {
-          dashboard: 'Business Performance',
-          customers: 'Customers',
+          dashboard: 'Marketing',
+          leads: 'Leads',
+          customers: 'Clients',
           tasks: 'Tasks',
           revenue: 'Income',
           expenses: 'Expenses',
           timesheet: 'Timesheet',
-          performance: 'Projects',
+          performance: 'Campaigns',
           retention: 'Retention',
           insights: 'Insights',
           marketing: 'Marketing',
+          reports: 'Reports',
           chat: 'Advisor',
           team: 'Your team',
           settings: 'Settings',
         };
         mobileTitle.textContent = titles[pageId] || 'Dashboard';
+      }
+      if (pageId === 'reports') {
+        wireReportsPage();
+        renderReportsActiveTab();
+      }
+      if (pageId === 'customers') {
+        refreshCrmDirectoryViews();
+        renderClientRelationshipPanels();
+      }
+      if (pageId === 'leads') {
+        refreshCrmDirectoryViews();
+        renderLeadPipelinePanels();
+      }
+      if (pageId === 'dashboard') {
+        renderMarketingDashboard(true);
       }
       if (pageId === 'team' && typeof window.refreshTeamPage === 'function') {
         window.refreshTeamPage();

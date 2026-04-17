@@ -8,18 +8,18 @@
   var THINKING_MIN_MS = 2000;
 
   var WELCOME =
-    'Hi — I am your business copilot for this dashboard.\n\n' +
-    'I help turn your numbers into clear next steps, not just answers.\n\n' +
+    'Hi — I am your marketing copilot for this workspace.\n\n' +
+    'I help you interpret GA4, campaigns, and your client list into clear next steps.\n\n' +
     'Use Advisor to:\n' +
-    '• Prioritize today\'s most important actions\n' +
-    '• Follow up on overdue invoices and client outreach\n' +
-    '• Understand profit or expense changes over time\n' +
-    '• Generate Monday plans and Friday recaps\n\n' +
-    'Advisor uses your dashboard data and signed-in session context to provide focused recommendations and drafts. You stay in control of final decisions and actions.';
+    '• Prioritize acquisition actions for today\n' +
+    '• Draft follow-ups for clients and prospects\n' +
+    '• Explain changes in sessions, conversion rate, or channel mix\n' +
+    '• Generate Monday plans and Friday recaps grounded in your data\n\n' +
+    'Advisor uses GA4 summaries, campaign rows, and CRM clients from this dashboard (plus your message). You stay in control of final decisions.';
   var WELCOME_MOBILE =
-    'Hi — I am your business copilot.\n\n' +
-    'I turn dashboard numbers into prioritized next steps.\n\n' +
-    'Use the task chips for Daily brief, Follow-up draft, Variance explanation, and Weekly recap.';
+    'Hi — marketing copilot.\n\n' +
+    'GA4 + campaigns + clients → prioritized next steps.\n\n' +
+    'Use the chips for Daily brief, Follow-up, Variance, and Weekly recap.';
 
   var TOOL_META = {
     createImage: { short: 'Image' },
@@ -926,6 +926,12 @@
           typeof window.bizDashGetAdvisorContactContext === 'function' ? window.bizDashGetAdvisorContactContext() : null;
         var clientsDigest =
           typeof window.bizDashGetClientsDigestForAdvisor === 'function' ? window.bizDashGetClientsDigestForAdvisor() : [];
+        var ga4Summary =
+          typeof window.bizDashGetGa4SummaryForAdvisor === 'function' ? window.bizDashGetGa4SummaryForAdvisor() : null;
+        var topChannels =
+          typeof window.bizDashGetGa4ChannelsSliceForAdvisor === 'function' ? window.bizDashGetGa4ChannelsSliceForAdvisor() : [];
+        var campaignsSnapshot =
+          typeof window.bizDashGetCampaignsSnapshotForAdvisor === 'function' ? window.bizDashGetCampaignsSnapshotForAdvisor() : [];
         var orgId = typeof window.bizDashGetCurrentOrgId === 'function' ? window.bizDashGetCurrentOrgId() : window.currentOrganizationId;
         var request = {
           organizationId: orgId || undefined,
@@ -937,6 +943,10 @@
             selectedTool: selectedTool || null,
             contactRequest: contactSnapshot,
             clientsDigest: clientsDigest,
+            ga4Summary: ga4Summary,
+            topChannels: topChannels,
+            campaignsSnapshot: campaignsSnapshot,
+            leadsSnapshot: clientsDigest,
           },
           constraints: { maxBullets: 5, tone: 'concise' },
         };

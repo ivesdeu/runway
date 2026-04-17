@@ -477,7 +477,7 @@
       var role = ($('ob-role') && $('ob-role').value.trim()) || '';
       var tagline = ($('ob-tagline') && $('ob-tagline').value.trim()) || '';
       var accentEl = $('ob-accent');
-      var accent = accentEl && accentEl.value ? accentEl.value : '#e8501a';
+      var accent = accentEl && accentEl.value ? accentEl.value : '#d4f542';
       if (!name) {
         if (err) err.textContent = 'Company name is required.';
         return;
