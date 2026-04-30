@@ -59,7 +59,7 @@ function shouldReflectOrigin(origin: string | null): boolean {
 export function corsHeadersFor(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin");
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-demo-mvp-token",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   };
   if (origin && shouldReflectOrigin(origin)) {

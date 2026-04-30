@@ -2137,6 +2137,201 @@
     return applyClientMetadata(base, meta);
   }
 
+  var attributionLeads = [];
+  var attributionLeadsTableUnavailable = false;
+
+  function mapAttrLeadRow(row) {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      submittedAt: row.submitted_at || row.created_at,
+      contactName: row.contact_name || '',
+      companyName: row.company_name || '',
+      email: String(row.email || '').trim(),
+      phone: row.phone || '',
+      utmSource: row.utm_source || '',
+      utmMedium: row.utm_medium || '',
+      utmCampaign: row.utm_campaign || '',
+      gaClientId: row.ga_client_id || '',
+      gaSessionId: row.ga_session_id || '',
+      userPseudoId: row.user_pseudo_id || '',
+      gclid: row.gclid || '',
+      searchKeyword: row.search_keyword || '',
+      firstTouch: row.first_touch && typeof row.first_touch === 'object' ? row.first_touch : {},
+      marketingClientId: row.marketing_client_id || '',
+      purchased: !!row.purchased,
+      purchaseAmount: Number(row.purchase_amount || 0),
+      isRetainer: !!row.is_retainer,
+      lifetimeValue: Number(row.lifetime_value || 0),
+      linkedClientId: row.linked_client_id || null,
+      matchedAt: row.matched_at || null,
+      importSource: row.import_source || 'form',
+      rawImport: row.raw_import && typeof row.raw_import === 'object' ? row.raw_import : {},
+    };
+  }
+
+  function attrLeadRowForDb(lead) {
+    var orgId = getCurrentOrgId();
+    var row = {
+      organization_id: orgId,
+      submitted_at: lead.submittedAt
+        ? new Date(lead.submittedAt).toISOString()
+        : new Date().toISOString(),
+      contact_name: lead.contactName ? String(lead.contactName).trim() || null : null,
+      company_name: lead.companyName ? String(lead.companyName).trim() || null : null,
+      email: lead.email ? String(lead.email).trim().toLowerCase() : null,
+      phone: lead.phone ? String(lead.phone).trim() || null : null,
+      utm_source: lead.utmSource ? String(lead.utmSource).trim() || null : null,
+      utm_medium: lead.utmMedium ? String(lead.utmMedium).trim() || null : null,
+      utm_campaign: lead.utmCampaign ? String(lead.utmCampaign).trim() || null : null,
+      ga_client_id: lead.gaClientId ? String(lead.gaClientId).trim() || null : null,
+      ga_session_id: lead.gaSessionId ? String(lead.gaSessionId).trim() || null : null,
+      user_pseudo_id: lead.userPseudoId ? String(lead.userPseudoId).trim() || null : null,
+      gclid: lead.gclid ? String(lead.gclid).trim() || null : null,
+      search_keyword: lead.searchKeyword ? String(lead.searchKeyword).trim() || null : null,
+      first_touch: lead.firstTouch && typeof lead.firstTouch === 'object' ? lead.firstTouch : {},
+      marketing_client_id: lead.marketingClientId ? String(lead.marketingClientId).trim() || null : null,
+      purchased: !!lead.purchased,
+      purchase_amount: Number(lead.purchaseAmount) || 0,
+      is_retainer: !!lead.isRetainer,
+      lifetime_value: Number(lead.lifetimeValue) || 0,
+      linked_client_id: lead.linkedClientId || null,
+      matched_at: lead.matchedAt || null,
+      import_source: lead.importSource && ['form', 'csv', 'crm_import', 'dashboard'].indexOf(lead.importSource) !== -1
+        ? lead.importSource
+        : 'dashboard',
+      raw_import: lead.rawImport && typeof lead.rawImport === 'object' ? lead.rawImport : {},
+    };
+    if (lead.id) row.id = lead.id;
+    return row;
+  }
+
+  async function fetchAttributionLeadsFromSupabase() {
+    supabase = window.supabaseClient || supabase;
+    currentUser = window.currentUser || currentUser;
+    if (!supabase || !getCurrentOrgId()) return [];
+    try {
+      var result = await supabase
+        .from('attribution_leads')
+        .select('*')
+        .eq('organization_id', getCurrentOrgId())
+        .order('submitted_at', { ascending: false });
+      if (result.error) {
+        var msg = String(result.error.message || '');
+        if (result.error.code === '42P01' || /does not exist|could not find/i.test(msg)) {
+          attributionLeadsTableUnavailable = true;
+        }
+        console.error('attribution_leads load error', result.error);
+        return [];
+      }
+      attributionLeadsTableUnavailable = false;
+      return (result.data || []).map(mapAttrLeadRow);
+    } catch (err) {
+      console.error('fetchAttributionLeadsFromSupabase', err);
+      return [];
+    }
+  }
+
+  async function persistAttributionLeadToSupabase(lead) {
+    supabase = window.supabaseClient || supabase;
+    var orgId = getCurrentOrgId();
+    if (!supabase || !orgId) return { ok: false, error: 'No org' };
+    var body = attrLeadRowForDb(lead);
+    if (lead.id) {
+      var id = body.id;
+      delete body.id;
+      var up = await supabase.from('attribution_leads').update(body).eq('id', id).eq('organization_id', orgId).select('id');
+      if (up.error) return { ok: false, error: up.error };
+    } else {
+      delete body.id;
+      var ins = await supabase.from('attribution_leads').insert(body).select('id');
+      if (ins.error) return { ok: false, error: ins.error };
+      if (ins.data && ins.data[0] && ins.data[0].id) lead.id = ins.data[0].id;
+    }
+    return { ok: true };
+  }
+
+  async function deleteAttributionLeadFromSupabase(id) {
+    supabase = window.supabaseClient || supabase;
+    var orgId = getCurrentOrgId();
+    if (!supabase || !id || !orgId) return;
+    await supabase.from('attribution_leads').delete().eq('id', id).eq('organization_id', orgId);
+  }
+
+  function normEmailForMatch(s) {
+    return String(s || '').trim().toLowerCase();
+  }
+
+  function getClientMarketingIdFromMeta(c) {
+    var m = c && c.metadata;
+    if (!m || typeof m !== 'object') return '';
+    return String(m.marketing_client_id || m.marketingClientId || '').trim();
+  }
+
+  async function syncAttributionLeadsWithClients() {
+    supabase = window.supabaseClient || supabase;
+    if (!supabase || !getCurrentOrgId() || attributionLeadsTableUnavailable) {
+      alert('Attribution leads table is not available. Apply the latest database migration.');
+      return;
+    }
+    var remote = await fetchClientsFromSupabase();
+    if (remote && remote.length) clients = mergeClientsPreserveRetainer(clients, remote);
+
+    var changed = 0;
+    for (var i = 0; i < attributionLeads.length; i++) {
+      var L = attributionLeads[i];
+      if (!L || !L.id) continue;
+      var match = null;
+      var em = normEmailForMatch(L.email);
+      if (em) {
+        match = clients.find(function (c) {
+          return c && normEmailForMatch(c.email) === em;
+        });
+      }
+      if (!match && L.marketingClientId) {
+        var mid = String(L.marketingClientId).trim();
+        match = clients.find(function (c) {
+          return c && getClientMarketingIdFromMeta(c) === mid;
+        });
+      }
+      if (!match) continue;
+
+      var rev = Number(match.totalRevenue) || 0;
+      var acct = clientIsAccountStage(match);
+      var purchased = acct && rev > 0;
+      var next = Object.assign({}, L, {
+        linkedClientId: match.id,
+        purchased: purchased,
+        purchaseAmount: purchased ? rev : Number(L.purchaseAmount) || 0,
+        isRetainer: clientIsRetainer(match),
+        lifetimeValue: rev,
+        matchedAt: new Date().toISOString(),
+      });
+
+      if (
+        L.linkedClientId === next.linkedClientId &&
+        !!L.purchased === !!next.purchased &&
+        (Number(L.lifetimeValue) || 0) === (Number(next.lifetimeValue) || 0) &&
+        (Number(L.purchaseAmount) || 0) === (Number(next.purchaseAmount) || 0)
+      ) {
+        continue;
+      }
+
+      var r = await persistAttributionLeadToSupabase(next);
+      if (r.ok) {
+        attributionLeads[i] = next;
+        changed += 1;
+      }
+    }
+
+    attributionLeads = await fetchAttributionLeadsFromSupabase();
+    refreshCrmDirectoryViews();
+    renderMarketingDashboard(true);
+    alert(changed ? 'Updated ' + changed + ' lead(s) from CRM match.' : 'No new matches. Check emails or marketing_client_id on both sides.');
+  }
+
   function mapCrmEventRow(row) {
     return {
       id: row.id,
@@ -4938,11 +5133,25 @@ var incomePowerState = {
 
   function buildWeeklySummaryText(kind) {
     var prefix = kind === 'monday' ? 'Monday summary' : 'Friday recap';
-    var nClients = clients.length;
     var camps = projects.length;
     var sm = lastMarketingGa4Dashboard && lastMarketingGa4Dashboard.summary;
     var sess = sm && sm.sessions != null ? fmtInt(sm.sessions) : '—';
-    return prefix + ': ' + nClients + ' clients, ' + camps + ' campaigns, GA4 sessions (28d) ' + sess + '.';
+    var nAttr = (attributionLeads || []).length;
+    var revAttr = (attributionLeads || []).reduce(function (a, L) {
+      return a + (Number(L.lifetimeValue) || 0);
+    }, 0);
+    return (
+      prefix +
+      ': ' +
+      nAttr +
+      ' attribution leads, ' +
+      camps +
+      ' budget campaigns, GA4 sessions (28d) ' +
+      sess +
+      ', attributed LTV ' +
+      fmtCurrency(revAttr) +
+      '.'
+    );
   }
 
   function wirePersonableActions() {
@@ -5178,6 +5387,8 @@ var incomePowerState = {
         latestSummary.textContent = 'No summary generated yet.';
       }
     }
+
+    if ($('mkt-kpi-engagement')) applyDashboardCrmBridgeKpis(lastMarketingGa4Dashboard);
   }
 
   function renderRevenueByVertical(c) {
@@ -6337,6 +6548,149 @@ var incomePowerState = {
     }
   }
 
+  /** Aggregates from attribution_leads by normalized utm_campaign (align names with GA4 session campaign). */
+  function aggregateAttrLeadsByUtmCampaign() {
+    var map = Object.create(null);
+    (attributionLeads || []).forEach(function (L) {
+      if (!L) return;
+      var raw = String(L.utmCampaign || '').trim();
+      if (!raw) return;
+      var k = normAttributionKey(raw);
+      if (!map[k]) {
+        map[k] = { pipelineCount: 0, accountRev: 0, rawLabel: raw };
+      }
+      if (!L.purchased) map[k].pipelineCount += 1;
+      else map[k].accountRev += Number(L.lifetimeValue) || 0;
+    });
+    return map;
+  }
+
+  function renderCampaignAttributionMerge(gaData) {
+    var tb = $('mk-attrib-body');
+    var tbl = $('mk-attrib-table');
+    var empty = $('mk-attrib-empty');
+    if (!tb || !tbl || !empty) return;
+
+    var crmMap = aggregateAttrLeadsByUtmCampaign();
+    var rows = [];
+    var usedCrmKeys = Object.create(null);
+    var camps = gaData && Array.isArray(gaData.topCampaigns) ? gaData.topCampaigns : [];
+
+    camps.forEach(function (row) {
+      var name = String(row.campaign != null ? row.campaign : row.campaignName || '').trim() || '(not set)';
+      var nk = normAttributionKey(name);
+      var agg = crmMap[nk] || { pipelineCount: 0, accountRev: 0, rawLabel: '' };
+      usedCrmKeys[nk] = 1;
+      var match =
+        agg.accountRev > 0
+          ? 'LTV'
+          : agg.pipelineCount > 0
+            ? 'Open leads'
+            : '(not set)' === name || name === '(direct)'
+              ? '—'
+              : 'No lead rows';
+      rows.push({
+        campaign: name,
+        sessions: Number(row.sessions) || 0,
+        conversions: Number(row.conversions) || 0,
+        pipeline: agg.pipelineCount,
+        revenue: agg.accountRev,
+        match: match,
+      });
+    });
+
+    var crmOnly = [];
+    Object.keys(crmMap).forEach(function (k) {
+      if (usedCrmKeys[k]) return;
+      var agg = crmMap[k];
+      if (!agg || (agg.pipelineCount === 0 && agg.accountRev === 0)) return;
+      crmOnly.push({
+        campaign: agg.rawLabel || k,
+        sessions: 0,
+        conversions: 0,
+        pipeline: agg.pipelineCount,
+        revenue: agg.accountRev,
+        match: 'Leads only · not in GA4 top list',
+      });
+    });
+    crmOnly.sort(function (a, b) {
+      return (b.revenue || 0) - (a.revenue || 0) || (b.pipeline || 0) - (a.pipeline || 0);
+    });
+    rows = rows.concat(crmOnly.slice(0, 8));
+
+    if (!rows.length) {
+      tb.innerHTML = '';
+      tbl.style.display = 'none';
+      empty.style.display = 'block';
+      empty.innerHTML =
+        'No merged rows yet. When GA4 is live, session campaign names should match <code style="font-size:11px;">utm_campaign</code> on <code style="font-size:11px;">attribution_leads</code>.';
+      return;
+    }
+
+    empty.style.display = 'none';
+    tbl.style.display = 'table';
+    tb.innerHTML = rows
+      .map(function (r) {
+        return (
+          '<tr><td class="tdp td-truncate" title="' +
+          escAttr(r.campaign) +
+          '">' +
+          esc(r.campaign) +
+          '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' +
+          fmtInt(r.sessions) +
+          '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' +
+          fmtInt(r.conversions) +
+          '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' +
+          fmtInt(r.pipeline) +
+          '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' +
+          fmtCurrency(r.revenue) +
+          '</td><td style="font-size:12px;color:var(--text2);">' +
+          esc(r.match) +
+          '</td></tr>'
+        );
+      })
+      .join('');
+  }
+
+  /** CRM-side KPIs on the attribution strip + merged table (safe when GA4 payload is null). */
+  function applyDashboardCrmBridgeKpis(gaData) {
+    if (!$('mkt-kpi-engagement')) return;
+    var pipeUtm = (attributionLeads || []).filter(function (L) {
+      return (
+        L &&
+        !L.purchased &&
+        (String(L.utmSource || '').trim() || String(L.utmMedium || '').trim() || String(L.utmCampaign || '').trim())
+      );
+    }).length;
+    setText('mkt-kpi-engagement', fmtInt(pipeUtm));
+    setText('mkt-kpi-avg-duration', 'With UTM · not purchased');
+    var revUtm = (attributionLeads || []).reduce(function (a, L) {
+      return a + (Number(L.lifetimeValue) || 0);
+    }, 0);
+    setText('mkt-kpi-leads', fmtCurrency(revUtm));
+    setText('mkt-kpi-leads-note', 'Sum of LTV on attribution_leads');
+
+    var matchedRev = 0;
+    if (gaData && Array.isArray(gaData.topCampaigns)) {
+      var cmap = aggregateAttrLeadsByUtmCampaign();
+      gaData.topCampaigns.forEach(function (row) {
+        var name = String(row.campaign != null ? row.campaign : row.campaignName || '').trim();
+        var agg = cmap[normAttributionKey(name)];
+        if (agg) matchedRev += Number(agg.accountRev) || 0;
+      });
+    }
+    var cplEl = $('mkt-kpi-cpl');
+    if (cplEl && matchedRev > 0) {
+      cplEl.textContent = 'Matched revenue ' + fmtCurrency(matchedRev) + ' · top GA4 campaigns';
+    }
+    renderCampaignAttributionMerge(gaData || null);
+  }
+
+  function refreshDashboardAttributionFromCrm() {
+    if (!$('mk-attrib-body') && !$('mkt-kpi-engagement')) return;
+    applyDashboardCrmBridgeKpis(lastMarketingGa4Dashboard);
+  }
+
   var lastMarketingGa4Dashboard = null;
   var marketingDashFetchToken = 0;
   var reportsActiveTab = 'channel_performance';
@@ -6446,10 +6800,10 @@ var incomePowerState = {
         { landingPage: '/contact', sessions: 980, conversions: 88, cvr: 88 / 980 },
       ],
       topCampaigns: [
-        { campaign: 'spring_launch_2026', sessions: 4200 },
-        { campaign: 'brand_search_exact', sessions: 3180 },
-        { campaign: 'newsletter_apr', sessions: 1640 },
-        { campaign: '(direct)', sessions: 920 },
+        { campaign: 'spring_launch_2026', sessions: 4200, conversions: 168 },
+        { campaign: 'brand_search_exact', sessions: 3180, conversions: 112 },
+        { campaign: 'newsletter_apr', sessions: 1640, conversions: 96 },
+        { campaign: '(direct)', sessions: 920, conversions: 28 },
       ],
     };
   }
@@ -6516,45 +6870,11 @@ var incomePowerState = {
     setText('mkt-kpi-sessions', fmtInt(sum.sessions));
     var sd = sum.sessionsDeltaPct;
     setText('mkt-kpi-sessions-delta', sd == null || !isFinite(sd) ? 'vs prior 28d' : (sd >= 0 ? '+' : '') + Number(sd).toFixed(1) + '% vs prior');
-    setText('mkt-kpi-newusers', fmtInt(sum.newUsers));
-    var nd = sum.newUsersDeltaPct;
-    setText('mkt-kpi-newusers-delta', nd == null || !isFinite(nd) ? '—' : (nd >= 0 ? '+' : '') + Number(nd).toFixed(1) + '%');
+    setText('mkt-kpi-newusers', fmtInt(sum.conversions));
+    setText('mkt-kpi-newusers-delta', 'All key events · configure lead/call events in GA4');
     setText('mkt-kpi-cvr', fmtGa4Pct(sum.conversionRate));
-    setText('mkt-kpi-engagement', sum.engagementRate != null && isFinite(Number(sum.engagementRate)) ? (Number(sum.engagementRate) * 100).toFixed(1) + '%' : '—');
-    var avgSec = Number(sum.avgSessionDuration);
-    setText('mkt-kpi-avg-duration', isFinite(avgSec) && avgSec > 0 ? Math.round(avgSec) + 's avg' : '—');
-    var leadSum = projects.reduce(function (a, p) {
-      return a + (Number(p && p.leadsGenerated) || 0);
-    }, 0);
-    setText('mkt-kpi-leads', fmtInt(leadSum));
     setText('mkt-kpi-topchannel', sum.topChannel || '—');
     setText('mkt-kpi-cpl', sum.costPerLead != null && isFinite(Number(sum.costPerLead)) ? 'CPL ' + fmtCurrency(sum.costPerLead) : 'CPL: set ad spend in settings');
-
-    var camps = Array.isArray(data.topCampaigns) ? data.topCampaigns : [];
-    var tbl = $('mk-top-campaigns-table');
-    var tb = $('mk-top-campaigns-body');
-    var empty = $('mk-top-campaigns-empty');
-    if (tb) {
-      if (!camps.length) {
-        tb.innerHTML = '';
-        if (tbl) tbl.style.display = 'none';
-        if (empty) empty.style.display = 'block';
-      } else {
-        if (empty) empty.style.display = 'none';
-        if (tbl) tbl.style.display = 'table';
-        tb.innerHTML = camps
-          .map(function (row) {
-            return (
-              '<tr><td>' +
-              esc(row.campaign || '') +
-              '</td><td style="font-variant-numeric:tabular-nums;">' +
-              fmtInt(row.sessions) +
-              '</td></tr>'
-            );
-          })
-          .join('');
-      }
-    }
 
     var lineCanvas = $('mk-dash-line');
     var series = Array.isArray(data.sessionsByDayChannel) ? data.sessionsByDayChannel : [];
@@ -6613,13 +6933,25 @@ var incomePowerState = {
     }
 
     var barCanvas = $('mk-dash-bar');
-    var lands = Array.isArray(data.landingPages) ? data.landingPages.slice(0, 8) : [];
-    var llabels = lands.map(function (x) {
-      return String(x.landingPage || '').slice(0, 42) || '—';
+    var cmap = aggregateAttrLeadsByUtmCampaign();
+    var campPairs = Object.keys(cmap).map(function (k) {
+      var a = cmap[k];
+      return { label: (a && a.rawLabel) || k, ltv: (a && a.accountRev) || 0 };
     });
-    var lcvr = lands.map(function (x) {
-      return (Number(x.cvr) || 0) * 100;
+    campPairs.sort(function (a, b) {
+      return (b.ltv || 0) - (a.ltv || 0);
     });
+    campPairs = campPairs.slice(0, 10);
+    var llabels = campPairs.length
+      ? campPairs.map(function (x) {
+          return String(x.label || '').slice(0, 40) || '—';
+        })
+      : ['No UTM campaigns yet'];
+    var ltvVals = campPairs.length
+      ? campPairs.map(function (x) {
+          return Number(x.ltv) || 0;
+        })
+      : [0];
     if (barCanvas && window.Chart) {
       if (mkDashBarChart) mkDashBarChart.destroy();
       mkDashBarChart = new Chart(barCanvas, {
@@ -6628,9 +6960,9 @@ var incomePowerState = {
           labels: llabels,
           datasets: [
             {
-              label: 'CVR %',
-              data: lcvr,
-              backgroundColor: '#111111',
+              label: 'LTV ($)',
+              data: ltvVals,
+              backgroundColor: '#16a34a',
             },
           ],
         },
@@ -6695,6 +7027,7 @@ var incomePowerState = {
         st.style.color = 'var(--amber)';
       }
       lastMarketingGa4Dashboard = null;
+      applyDashboardCrmBridgeKpis(null);
       return;
     }
     if (r.error) {
@@ -6702,6 +7035,7 @@ var incomePowerState = {
         st.textContent = String(r.error) + (r.details ? ' ' + String(r.details).slice(0, 200) : '');
         st.style.color = 'var(--red)';
       }
+      applyDashboardCrmBridgeKpis(null);
       return;
     }
     var data = r.data || {};
@@ -7997,6 +8331,23 @@ var incomePowerState = {
     return !!c && !clientIsAccountStage(c);
   }
 
+  function clientHasUtm(c) {
+    if (!c) return false;
+    return !!(
+      String(c.utmSource || '').trim() ||
+      String(c.utmMedium || '').trim() ||
+      String(c.utmCampaign || '').trim()
+    );
+  }
+
+  /** Normalize campaign / UTM strings for GA4 sessionCampaignName ↔ CRM utm_campaign joins. */
+  function normAttributionKey(s) {
+    return String(s || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
   function buildClientDirectoryRowHtml(c) {
     var pcount = clientProjectCount(c.id);
     var companyText = c.companyName || '—';
@@ -8096,7 +8447,7 @@ var incomePowerState = {
     );
   }
 
-  /** Reminders + CRM events for the Clients page (and dashboard welcome context). */
+  /** Reminders + CRM events (Clients page removed — use Leads / dashboard fallbacks). */
   function renderClientRelationshipPanels() {
     var now = new Date();
     var todayYmd = dateYMD(now);
@@ -8115,7 +8466,7 @@ var incomePowerState = {
       var days = Math.floor((now - d) / 86400000);
       if (days >= 30) reminders.push({ client: c, text: days + ' days since last outreach' });
     });
-    var remEl = $('crm-reminders-list');
+    var remEl = $('crm-reminders-list') || $('leads-reminders-list');
     if (remEl) {
       remEl.innerHTML = reminders.length
         ? reminders
@@ -8133,7 +8484,7 @@ var incomePowerState = {
         : '<div style="font-size:13px;color:var(--text3);">No overdue follow-ups right now.</div>';
     }
 
-    var evEl = $('crm-events-timeline');
+    var evEl = $('crm-events-timeline') || $('leads-events-timeline');
     if (evEl) {
       evEl.innerHTML = crmEvents.length
         ? crmEvents
@@ -8155,17 +8506,17 @@ var incomePowerState = {
     }
   }
 
-  /** Reminders + events scoped to pipeline leads (Leads page). */
+  /** Activity for leads linked to shared CRM clients (after purchase sync). */
   function renderLeadPipelinePanels() {
     var now = new Date();
     var todayYmd = dateYMD(now);
-    var leadIds = {};
-    clients.forEach(function (c) {
-      if (c && c.id && clientIsLeadStage(c)) leadIds[c.id] = true;
+    var linkedIds = {};
+    (attributionLeads || []).forEach(function (L) {
+      if (L && L.linkedClientId) linkedIds[L.linkedClientId] = true;
     });
     var reminders = [];
     clients.forEach(function (c) {
-      if (!c || !leadIds[c.id]) return;
+      if (!c || !linkedIds[c.id]) return;
       if (c.nextFollowUpAt) {
         var fu = String(c.nextFollowUpAt).trim().slice(0, 10);
         if (fu.length === 10 && fu < todayYmd) {
@@ -8186,19 +8537,19 @@ var incomePowerState = {
             .map(function (r) {
               return (
                 '<div class="kb bn" style="padding:8px 10px;background:var(--bg2);">' +
-                esc(r.client.companyName || 'Lead') +
+                esc(r.client.companyName || 'Linked account') +
                 ': ' +
                 esc(r.text) +
                 '</div>'
               );
             })
             .join('')
-        : '<div style="font-size:13px;color:var(--text3);">No reminders for pipeline leads.</div>';
+        : '<div style="font-size:13px;color:var(--text3);">No reminders for linked CRM rows. Run <strong>Sync purchases from CRM</strong> to link leads.</div>';
     }
     var evEl = $('leads-events-timeline');
     if (evEl) {
       var leadEvents = (crmEvents || []).filter(function (ev) {
-        return ev && ev.clientId && leadIds[ev.clientId];
+        return ev && ev.clientId && linkedIds[ev.clientId];
       });
       evEl.innerHTML = leadEvents.length
         ? leadEvents
@@ -8216,7 +8567,7 @@ var incomePowerState = {
               );
             })
             .join('')
-        : '<div style="font-size:13px;color:var(--text3);">No events yet for leads on this list.</div>';
+        : '<div style="font-size:13px;color:var(--text3);">No CRM events for linked clients yet.</div>';
     }
   }
 
@@ -8232,8 +8583,7 @@ var incomePowerState = {
   }
 
   function applyCustomersColumnVisibility() {
-    applyClientDirectoryColumnVisibility($('customers-table'));
-    applyClientDirectoryColumnVisibility($('leads-table'));
+    if ($('customers-table')) applyClientDirectoryColumnVisibility($('customers-table'));
   }
 
   function renderCustomersColumnsPanel() {
@@ -8336,6 +8686,74 @@ var incomePowerState = {
     setText('cust-kpi-3', String(k.withUtm));
   }
 
+  function attributionLeadsMatchingSearch(list, rawQ) {
+    var q = String(rawQ || '').trim().toLowerCase();
+    if (!q) return list || [];
+    return (list || []).filter(function (L) {
+      if (!L) return false;
+      var blob = [L.email, L.companyName, L.contactName, L.utmCampaign, L.utmSource, L.utmMedium, L.searchKeyword, L.phone]
+        .join(' ')
+        .toLowerCase();
+      return blob.indexOf(q) !== -1;
+    });
+  }
+
+  function fmtAttrLeadSubmitted(L) {
+    var s = L.submittedAt || L.createdAt;
+    if (!s) return '—';
+    try {
+      return new Date(s).toLocaleString();
+    } catch (_) {
+      return String(s).slice(0, 19);
+    }
+  }
+
+  function buildAttributionLeadRowHtml(L) {
+    var srcMed = [L.utmSource || '—', L.utmMedium || '—'].join(' / ');
+    var pur = L.purchased ? 'Yes' : 'No';
+    var ret = L.isRetainer ? 'Yes' : '—';
+    var linked = L.linkedClientId ? 'Linked' : '—';
+    return (
+      '<tr data-attr-lead-id="' +
+      esc(L.id) +
+      '"><td style="font-size:12px;white-space:nowrap;">' +
+      esc(fmtAttrLeadSubmitted(L)) +
+      '</td><td class="td-truncate" title="' +
+      escAttr(L.email || '') +
+      '">' +
+      esc(L.email || '—') +
+      '</td><td class="td-truncate">' +
+      esc(L.companyName || '—') +
+      '</td><td class="td-truncate">' +
+      esc(L.contactName || '—') +
+      '</td><td>' +
+      esc(L.phone || '—') +
+      '</td><td class="td-truncate" title="' +
+      escAttr(String(L.utmCampaign || '')) +
+      '">' +
+      esc(L.utmCampaign || '—') +
+      '</td><td class="td-truncate" style="font-size:12px;">' +
+      esc(srcMed) +
+      '</td><td class="td-truncate">' +
+      esc(L.searchKeyword || '—') +
+      '</td><td>' +
+      pur +
+      '</td><td style="font-variant-numeric:tabular-nums;">' +
+      fmtCurrency(L.purchaseAmount || 0) +
+      '</td><td>' +
+      ret +
+      '</td><td style="font-variant-numeric:tabular-nums;">' +
+      fmtCurrency(L.lifetimeValue || 0) +
+      '</td><td style="font-size:12px;">' +
+      linked +
+      '</td><td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn" data-attr-lead-edit="' +
+      esc(L.id) +
+      '">Edit</button><button type="button" class="btn" data-attr-lead-del="' +
+      esc(L.id) +
+      '" style="color:var(--red);">Delete</button></div></td></tr>'
+    );
+  }
+
   function renderLeads() {
     var tbody = $('leads-tbody');
     var empty = $('leads-empty');
@@ -8343,22 +8761,28 @@ var incomePowerState = {
     if (!tbody) return;
 
     var searchEl = $('leads-search');
-    var leads = clients.filter(clientIsLeadStage);
-    var visible = clientsMatchingSearch(leads, searchEl ? searchEl.value : '');
+    var visible = attributionLeadsMatchingSearch(attributionLeads, searchEl ? searchEl.value : '');
 
-    if (!clients.length) {
-      tbody.innerHTML = '';
-      if (empty) {
-        empty.style.display = 'block';
-        empty.textContent = 'No leads yet. Use “Add lead” to capture a prospect.';
-      }
-      if (table) table.style.display = 'none';
-    } else if (!leads.length) {
+    if (attributionLeadsTableUnavailable) {
       tbody.innerHTML = '';
       if (empty) {
         empty.style.display = 'block';
         empty.textContent =
-          'Pipeline is empty — every record is already an account on Clients, or add a new lead.';
+          'The attribution_leads table is not installed. Apply migration 20260419120000_attribution_leads.sql to this Supabase project.';
+      }
+      if (table) table.style.display = 'none';
+      setText('lead-kpi-1', '0');
+      setText('lead-kpi-2', '0');
+      setText('lead-kpi-3', '—');
+      return;
+    }
+
+    if (!attributionLeads.length) {
+      tbody.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'block';
+        empty.textContent =
+          'No leads yet — add manually, import CSV, or POST to the attribution-lead-ingest Edge Function (see docs/ATTRIBUTION_LEAD_INGEST.md).';
       }
       if (table) table.style.display = 'none';
     } else if (!visible.length) {
@@ -8371,18 +8795,21 @@ var incomePowerState = {
     } else {
       if (empty) empty.style.display = 'none';
       if (table) table.style.display = 'table';
-      tbody.innerHTML = visible.map(buildClientDirectoryRowHtml).join('');
-      applyCustomersColumnVisibility();
+      tbody.innerHTML = visible.map(buildAttributionLeadRowHtml).join('');
     }
 
-    var lk = computeLeadKpis();
-    setText('lead-kpi-1', String(lk.total));
-    setText('lead-kpi-2', String(lk.notExported));
-    setText('lead-kpi-3', String(lk.withUtm));
+    var purchasedN = (attributionLeads || []).filter(function (L) {
+      return L && L.purchased;
+    }).length;
+    var revSum = (attributionLeads || []).reduce(function (a, L) {
+      return a + (Number(L.lifetimeValue) || 0);
+    }, 0);
+    setText('lead-kpi-1', String(attributionLeads.length));
+    setText('lead-kpi-2', String(purchasedN));
+    setText('lead-kpi-3', fmtCurrency(revSum));
   }
 
   function refreshCrmDirectoryViews() {
-    if ($('customers-tbody')) renderClients();
     if ($('leads-tbody')) renderLeads();
   }
 
@@ -11155,7 +11582,6 @@ var incomePowerState = {
       });
     }
     wireClientDirectoryTableHandlers($('customers-table'));
-    wireClientDirectoryTableHandlers($('leads-table'));
 
     var projTable = $('projects-table');
     if (projTable) {
@@ -11544,19 +11970,47 @@ var incomePowerState = {
   }
 
   function exportLeadsPipelineCsv() {
-    var list = clients.filter(clientIsLeadStage);
+    var list = attributionLeads || [];
     if (!list.length) {
-      alert('No pipeline leads to export.');
+      alert('No attribution leads to export.');
       return;
     }
-    var rows = [['FirstName', 'LastName', 'Email', 'Company', 'Phone', 'LeadSource', 'Description']];
-    list.forEach(function (c) {
-      if (!c) return;
-      var nm = splitContactNameForCsv(c.contactName);
-      var desc = [c.notes, c.utmSource && 'utm_source=' + c.utmSource, c.utmMedium && 'utm_medium=' + c.utmMedium, c.utmCampaign && 'utm_campaign=' + c.utmCampaign]
-        .filter(Boolean)
-        .join(' | ');
-      rows.push([nm.first, nm.last, c.email || '', c.companyName || '', c.phone || '', c.leadSource || '', desc]);
+    var rows = [[
+      'submittedAt',
+      'email',
+      'companyName',
+      'contactName',
+      'phone',
+      'utm_campaign',
+      'utm_source',
+      'utm_medium',
+      'search_keyword',
+      'purchased',
+      'purchase_amount',
+      'is_retainer',
+      'lifetime_value',
+      'linked_client_id',
+      'marketing_client_id',
+    ]];
+    list.forEach(function (L) {
+      if (!L) return;
+      rows.push([
+        L.submittedAt || L.createdAt || '',
+        L.email || '',
+        L.companyName || '',
+        L.contactName || '',
+        L.phone || '',
+        L.utmCampaign || '',
+        L.utmSource || '',
+        L.utmMedium || '',
+        L.searchKeyword || '',
+        L.purchased ? 'true' : 'false',
+        String(L.purchaseAmount != null ? L.purchaseAmount : 0),
+        L.isRetainer ? 'true' : 'false',
+        String(L.lifetimeValue != null ? L.lifetimeValue : 0),
+        L.linkedClientId || '',
+        L.marketingClientId || '',
+      ]);
     });
     function q(v) {
       return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
@@ -11569,9 +12023,154 @@ var incomePowerState = {
     var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'leads-pipeline-export.csv';
+    a.download = 'attribution-leads-export.csv';
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  function closeAttributionLeadModal() {
+    var m = $('attributionLeadModal');
+    if (m) m.classList.remove('on');
+  }
+
+  function openAttributionLeadModal(lead) {
+    var m = $('attributionLeadModal');
+    if (!m) return;
+    var title = $('attr-lead-modal-title');
+    var editId = $('attr-lead-edit-id');
+    var L = lead || {};
+    if (title) title.textContent = L.id ? 'Edit form lead' : 'Add form lead';
+    if (editId) editId.value = L.id || '';
+    function setv(id, v) {
+      var el = $(id);
+      if (el) el.value = v != null ? String(v) : '';
+    }
+    setv('attr-lead-email', L.email || '');
+    setv('attr-lead-company', L.companyName || '');
+    setv('attr-lead-contact', L.contactName || '');
+    setv('attr-lead-phone', L.phone || '');
+    setv('attr-lead-utm-campaign', L.utmCampaign || '');
+    setv('attr-lead-utm-source', L.utmSource || '');
+    setv('attr-lead-utm-medium', L.utmMedium || '');
+    setv('attr-lead-keyword', L.searchKeyword || '');
+    setv('attr-lead-marketing-id', L.marketingClientId || '');
+    setv('attr-lead-ga-client', L.gaClientId || '');
+    var sub = $('attr-lead-submitted');
+    if (sub) {
+      var raw = L.submittedAt || L.createdAt;
+      if (raw) {
+        try {
+          var d = new Date(raw);
+          if (!isNaN(d.getTime())) {
+            sub.value = d.toISOString().slice(0, 16);
+          } else {
+            sub.value = '';
+          }
+        } catch (_) {
+          sub.value = '';
+        }
+      } else {
+        sub.value = new Date().toISOString().slice(0, 16);
+      }
+    }
+    m.classList.add('on');
+  }
+
+  function parseCsvLineSimple(line) {
+    var out = [];
+    var cur = '';
+    var inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') {
+        inQ = !inQ;
+      } else if (ch === ',' && !inQ) {
+        out.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur.trim());
+    return out.map(function (c) {
+      return c.replace(/^"|"$/g, '');
+    });
+  }
+
+  async function importAttributionLeadsFromCsvText(text) {
+    var sb = window.supabaseClient || supabase;
+    var orgId = getCurrentOrgId();
+    if (!sb || !orgId) {
+      alert('Select a workspace.');
+      return;
+    }
+    var lines = String(text || '')
+      .split(/\r?\n/)
+      .map(function (l) {
+        return l.trim();
+      })
+      .filter(Boolean);
+    if (lines.length < 2) {
+      alert('CSV needs a header row and at least one data row.');
+      return;
+    }
+    var headers = parseCsvLineSimple(lines[0]).map(function (h) {
+      return h.trim().toLowerCase();
+    });
+    var rows = [];
+    for (var li = 1; li < lines.length; li++) {
+      var cols = parseCsvLineSimple(lines[li]);
+      var o = {};
+      headers.forEach(function (h, idx) {
+        o[h] = cols[idx] != null ? cols[idx] : '';
+      });
+      function pick() {
+        for (var ai = 0; ai < arguments.length; ai++) {
+          var k = arguments[ai];
+          if (o[k] != null && String(o[k]).trim() !== '') return String(o[k]).trim();
+        }
+        return '';
+      }
+      rows.push({
+        email: pick('email'),
+        companyName: pick('companyname', 'company_name', 'company'),
+        contactName: pick('contactname', 'contact_name', 'contact'),
+        phone: pick('phone'),
+        utmCampaign: pick('utm_campaign', 'utmcampaign'),
+        utmSource: pick('utm_source', 'utmsource'),
+        utmMedium: pick('utm_medium', 'utmmedium'),
+        searchKeyword: pick('search_keyword', 'keyword'),
+        marketingClientId: pick('marketing_client_id', 'marketingclientid'),
+        submittedAt: pick('submittedat', 'submitted_at', 'created_at') || undefined,
+        purchased: String(pick('purchased')).toLowerCase() === 'true',
+        purchaseAmount: Number(pick('purchase_amount', 'purchaseamount')) || 0,
+        isRetainer: String(pick('is_retainer', 'isretainer')).toLowerCase() === 'true',
+        lifetimeValue: Number(pick('lifetime_value', 'lifetimevalue')) || 0,
+      });
+    }
+    var sessRes = await sb.auth.getSession();
+    var sess = sessRes && sessRes.data ? sessRes.data.session : null;
+    if (!sess || !sess.access_token) {
+      alert('Sign in to import.');
+      return;
+    }
+    var res = await sb.functions.invoke('attribution-leads-import-bulk', {
+      body: { organizationId: orgId, rows: rows, importSource: 'csv' },
+      headers: { Authorization: 'Bearer ' + sess.access_token },
+    });
+    if (res.error) {
+      alert(res.error.message || 'Import failed.');
+      return;
+    }
+    var d = res.data || {};
+    if (!d.ok) {
+      alert(String(d.error || 'Import failed.'));
+      return;
+    }
+    attributionLeads = await fetchAttributionLeadsFromSupabase();
+    refreshCrmDirectoryViews();
+    renderMarketingDashboard(true);
+    alert('Imported ' + (d.inserted || rows.length) + ' row(s).');
   }
 
   function exportLeadsSalesforceCsv() {
@@ -11625,6 +12224,120 @@ var incomePowerState = {
       custSearch.setAttribute('data-wired-cs', '1');
       custSearch.addEventListener('input', function () {
         renderClients();
+      });
+    }
+
+    var syncPurch = $('btn-leads-sync-purchases');
+    if (syncPurch && syncPurch.getAttribute('data-wired-sp') !== '1') {
+      syncPurch.setAttribute('data-wired-sp', '1');
+      syncPurch.addEventListener('click', function () {
+        syncAttributionLeadsWithClients();
+      });
+    }
+    var csvBtn = $('btn-leads-csv-import');
+    var csvFile = $('leads-csv-file');
+    if (csvBtn && csvFile && csvBtn.getAttribute('data-wired-csv') !== '1') {
+      csvBtn.setAttribute('data-wired-csv', '1');
+      csvBtn.addEventListener('click', function () {
+        csvFile.click();
+      });
+      csvFile.addEventListener('change', async function () {
+        var f = csvFile.files && csvFile.files[0];
+        csvFile.value = '';
+        if (!f) return;
+        try {
+          var text = await f.text();
+          await importAttributionLeadsFromCsvText(text);
+        } catch (err) {
+          console.error(err);
+          alert('Could not read CSV file.');
+        }
+      });
+    }
+
+    var leadTbl = $('leads-table');
+    if (leadTbl && leadTbl.getAttribute('data-attr-act') !== '1') {
+      leadTbl.setAttribute('data-attr-act', '1');
+      leadTbl.addEventListener('click', async function (ev) {
+        var editBtn = ev.target.closest('[data-attr-lead-edit]');
+        var delBtn = ev.target.closest('[data-attr-lead-del]');
+        if (editBtn) {
+          var eid = editBtn.getAttribute('data-attr-lead-edit');
+          var found = attributionLeads.find(function (x) {
+            return x && x.id === eid;
+          });
+          if (found) openAttributionLeadModal(found);
+        }
+        if (delBtn) {
+          var did = delBtn.getAttribute('data-attr-lead-del');
+          if (!did || !confirm('Delete this lead permanently?')) return;
+          await deleteAttributionLeadFromSupabase(did);
+          attributionLeads = (attributionLeads || []).filter(function (x) {
+            return x && x.id !== did;
+          });
+          refreshCrmDirectoryViews();
+          renderMarketingDashboard(true);
+        }
+      });
+    }
+
+    var btnAttrCancel = $('btn-attr-lead-cancel');
+    var btnAttrSave = $('btn-attr-lead-save');
+    if (btnAttrCancel && btnAttrCancel.getAttribute('data-wired-ac') !== '1') {
+      btnAttrCancel.setAttribute('data-wired-ac', '1');
+      btnAttrCancel.addEventListener('click', closeAttributionLeadModal);
+    }
+    if (btnAttrSave && btnAttrSave.getAttribute('data-wired-as') !== '1') {
+      btnAttrSave.setAttribute('data-wired-as', '1');
+      btnAttrSave.addEventListener('click', async function () {
+        if (!getCurrentOrgId()) {
+          alert('Select a workspace.');
+          return;
+        }
+        function v(id) {
+          var el = $(id);
+          return el ? String(el.value || '').trim() : '';
+        }
+        var editId = v('attr-lead-edit-id');
+        var prev = editId
+          ? attributionLeads.find(function (x) {
+              return x && x.id === editId;
+            })
+          : null;
+        var lead = {
+          id: editId || null,
+          email: v('attr-lead-email'),
+          companyName: v('attr-lead-company'),
+          contactName: v('attr-lead-contact'),
+          phone: v('attr-lead-phone'),
+          utmCampaign: v('attr-lead-utm-campaign'),
+          utmSource: v('attr-lead-utm-source'),
+          utmMedium: v('attr-lead-utm-medium'),
+          searchKeyword: v('attr-lead-keyword'),
+          marketingClientId: v('attr-lead-marketing-id'),
+          gaClientId: v('attr-lead-ga-client'),
+          submittedAt: v('attr-lead-submitted')
+            ? new Date(v('attr-lead-submitted')).toISOString()
+            : new Date().toISOString(),
+          purchased: prev ? !!prev.purchased : false,
+          purchaseAmount: prev ? Number(prev.purchaseAmount) || 0 : 0,
+          isRetainer: prev ? !!prev.isRetainer : false,
+          lifetimeValue: prev ? Number(prev.lifetimeValue) || 0 : 0,
+          linkedClientId: prev ? prev.linkedClientId : null,
+          matchedAt: prev ? prev.matchedAt : null,
+          importSource: prev ? prev.importSource || 'dashboard' : 'dashboard',
+          rawImport: prev ? prev.rawImport || {} : {},
+        };
+        var r = await persistAttributionLeadToSupabase(lead);
+        if (!r.ok) {
+          alert((r.error && r.error.message) || 'Could not save lead. Is migration applied?');
+          return;
+        }
+        attributionLeads = await fetchAttributionLeadsFromSupabase();
+        closeAttributionLeadModal();
+        refreshCrmDirectoryViews();
+        renderLeadPipelinePanels();
+        renderMarketingDashboard(true);
       });
     }
 
@@ -11694,11 +12407,10 @@ var incomePowerState = {
     }
 
     var btnAddLead = $('btn-add-lead');
-    if (btnAddLead) {
-      btnAddLead.addEventListener('click', async function () {
-        await wfRefreshFromSupabase();
-        openLeadModal();
-        wfFillClientPipelineSelect($('client-pipeline-stage'), null);
+    if (btnAddLead && btnAddLead.getAttribute('data-wired-al') !== '1') {
+      btnAddLead.setAttribute('data-wired-al', '1');
+      btnAddLead.addEventListener('click', function () {
+        openAttributionLeadModal(null);
       });
     }
     if (btnAddClient) {
@@ -12149,12 +12861,7 @@ var incomePowerState = {
         saveProjects(projects);
         if (savedProject) persistProjectToSupabase(savedProject);
         renderProjects();
-        if ($('mkt-kpi-leads')) {
-          var leadSum2 = projects.reduce(function (a, p) {
-            return a + (Number(p && p.leadsGenerated) || 0);
-          }, 0);
-          setText('mkt-kpi-leads', fmtInt(leadSum2));
-        }
+        refreshDashboardAttributionFromCrm();
         if (state.computed) renderInsights();
         closeProjectModal();
       });
@@ -12287,6 +12994,7 @@ var incomePowerState = {
       // Marketing build: skip ledger, invoices, legacy campaigns table, and timesheet in the browser.
       state.transactions = [];
       clients = loadClients();
+      attributionLeads = [];
       projects = loadProjects();
       invoices = [];
       campaigns = [];
@@ -12325,6 +13033,8 @@ var incomePowerState = {
           projects = mergeRemoteWithLocalOrphans(projects, remoteProjects, function (x) { return x; });
         }
 
+        attributionLeads = await fetchAttributionLeadsFromSupabase();
+
         crmEvents = await fetchCrmEventsFromSupabase();
         weeklySummaries = await fetchWeeklySummariesFromSupabase();
 
@@ -12359,6 +13069,7 @@ var incomePowerState = {
       console.error('initDataFromSupabase error', err);
       state.transactions = [];
       clients = loadClients();
+      attributionLeads = [];
       projects = loadProjects();
       invoices = [];
       campaigns = [];
@@ -13248,9 +13959,8 @@ var incomePowerState = {
       var mobileTitle = document.getElementById('mobile-title');
       if (mobileTitle) {
         var titles = {
-          dashboard: 'Marketing',
-          leads: 'Leads',
-          customers: 'Clients',
+          dashboard: 'Attribution',
+          leads: 'Form leads',
           tasks: 'Tasks',
           revenue: 'Income',
           expenses: 'Expenses',
@@ -13269,10 +13979,6 @@ var incomePowerState = {
       if (pageId === 'reports') {
         wireReportsPage();
         renderReportsActiveTab();
-      }
-      if (pageId === 'customers') {
-        refreshCrmDirectoryViews();
-        renderClientRelationshipPanels();
       }
       if (pageId === 'leads') {
         refreshCrmDirectoryViews();

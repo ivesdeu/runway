@@ -845,7 +845,7 @@
         if (typeof window.bizDashOpenClientModalWithDraft !== 'function') return;
         review.disabled = true;
         try {
-          if (typeof window.nav === 'function') window.nav('customers', null);
+          if (typeof window.nav === 'function') window.nav('leads', null);
           await window.bizDashOpenClientModalWithDraft(merged);
           await logAdvisorActionOutcome({
             id: mkUuid(),
@@ -885,7 +885,7 @@
           },
           created_at: new Date().toISOString(),
         });
-        if (result && result.ok && typeof window.nav === 'function') window.nav('customers', null);
+        if (result && result.ok && typeof window.nav === 'function') window.nav('leads', null);
         else if (!result || !result.ok) {
           window.alert((result && result.error) || 'Could not add client.');
           addBtn.disabled = false;

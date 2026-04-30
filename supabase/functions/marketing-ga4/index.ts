@@ -190,9 +190,9 @@ async function buildDashboardPayload(apiKey: string, propertyId: string) {
   const topCampaigns = await runGa4Report(apiKey, propertyId, {
     dateRanges: [cur],
     dimensions: [{ name: "sessionCampaignName" }],
-    metrics: [{ name: "sessions" }],
+    metrics: [{ name: "sessions" }, { name: "conversions" }],
     orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
-    limit: 5,
+    limit: 12,
   });
 
   const channelRows = mapRows(channels).map((r) => ({
@@ -221,6 +221,7 @@ async function buildDashboardPayload(apiKey: string, propertyId: string) {
   const campaignRows = mapRows(topCampaigns).map((r) => ({
     campaign: r.dimensions[0] || "(not set)",
     sessions: r.metrics[0] || 0,
+    conversions: r.metrics[1] || 0,
   }));
 
   return {

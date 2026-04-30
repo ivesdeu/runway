@@ -243,7 +243,7 @@ serve(async (req) => {
       }
       return json(req, 400, { error: invErr.message });
     }
-    const appBase = (Deno.env.get("APP_BASE_URL") || "http://localhost:5173").replace(/\/$/, "");
+    const appBase = (Deno.env.get("APP_BASE_URL") || "http://localhost:4173").replace(/\/$/, "");
     const inviteUrl = `${appBase}/?invite=${encodeURIComponent(token)}`;
     return json(req, 200, { ok: true, inviteUrl, token, expiresAt });
   }

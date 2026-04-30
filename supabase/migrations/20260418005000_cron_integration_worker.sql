@@ -1,0 +1,27 @@
+-- Example: schedule integration-worker via pg_cron + pg_net (Supabase: enable extensions as your plan allows).
+-- Replace placeholders before running. Do NOT commit real secrets into git — use Vault or manual paste in SQL editor.
+--
+--   <PROJECT_REF>     — Supabase project ref (subdomain of supabase.co)
+--   <CRON_SECRET>     — same value as INTEGRATION_WORKER_SECRET on the Edge Function
+--
+-- Uncomment after verifying extensions:
+--
+-- create extension if not exists pg_cron with schema extensions;
+-- create extension if not exists pg_net with schema extensions;
+--
+-- select cron.schedule(
+--   'integration-worker-every-15m',
+--   '*/15 * * * *',
+--   $$
+--   select net.http_post(
+--     url := 'https://<PROJECT_REF>.supabase.co/functions/v1/integration-worker',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'x-integration-worker-secret', '<CRON_SECRET>'
+--     ),
+--     body := '{}'::text
+--   );
+--   $$
+-- );
+
+SELECT 1;

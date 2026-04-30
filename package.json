@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "api": "node server/ga4-api.mjs",
+    "start": "node server/ga4-api.mjs",
     "build": "node scripts/build-static.mjs",
     "preview": "vite preview"
   },
@@ -13,6 +15,10 @@
     "vite": "^6.2.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.1"
+    "@google-analytics/data": "^5.0.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "google-auth-library": "^9.14.0"
   }
 }

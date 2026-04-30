@@ -3,17 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Runway</title>
+<title>Runway — Lead &amp; campaign performance</title>
+<!-- API base for GA4 routes; empty = same origin (e.g. run `npm start` and open :8787). For vite preview on another port, set full URL. -->
+<meta name="agency-api-base" content="http://127.0.0.1:8787" />
+<!-- Optional token forwarded to demo write endpoint (matches Supabase secret DEMO_MVP_WRITE_TOKEN). -->
+<meta name="demo-mvp-write-token" content="runway-demo-shared-write-2026" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&display=swap" rel="stylesheet" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111111'/%3E%3Ctext x='50%25' y='54%25' text-anchor='middle' font-size='26' fill='%23d4f542' font-family='system-ui,sans-serif' font-weight='700'%3ER%3C/text%3E%3C/svg%3E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script>
-  if (typeof Chart !== 'undefined' && Chart.defaults) {
-    Chart.defaults.font.family = '"DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  }
-</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -101,8 +99,43 @@
   .ni svg { width:15px; height:15px; flex-shrink:0; }
   .sb-spacer { flex:1; }
   .sb-div { height:1px; background:var(--border); margin:6px 0; }
-  .sb-user { display:flex; align-items:center; gap:10px; padding:14px 16px 18px; border-top:1px solid var(--border); color:var(--text2); font-size:13px; cursor:pointer; transition:background .15s; }
+  .sb-user-wrap { position:relative; border-top:1px solid var(--border); }
+  .sb-user { display:flex; align-items:center; gap:10px; padding:14px 16px 18px; color:var(--text2); font-size:13px; cursor:pointer; transition:background .15s; }
   .sb-user:hover { background:var(--bg3); color:var(--text); }
+  .sb-user-menu {
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:calc(100% + 8px);
+    z-index:220;
+    display:none;
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.1);
+    padding:6px;
+  }
+  .sb-user-menu.on { display:block; }
+  .sb-user-menu-item {
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    border:none;
+    background:transparent;
+    color:var(--text2);
+    border-radius:8px;
+    padding:9px 10px;
+    font-size:13px;
+    font-weight:500;
+    text-align:left;
+    cursor:pointer;
+  }
+  .sb-user-menu-item:hover { background:var(--bg3); color:var(--text); }
+  .sb-user-menu-item.danger { color:var(--red); }
+  .sb-user-menu-item.danger:hover { background:var(--red-bg); }
+  .sb-user-menu-item-note { font-size:11px; color:var(--text3); }
   .sb-user-name { font-size:13px; color:var(--text); font-weight:600; line-height:1.25; }
   .sb-user-role { font-size:11px; color:var(--text3); margin-top:2px; line-height:1.25; }
   .avatar { width:28px; height:28px; border-radius:50%; background:var(--coral); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--on-accent); flex-shrink:0; }
@@ -703,7 +736,6 @@
   #customers-table td:nth-child(3).td-truncate { max-width: 220px; }
   #customers-table td:nth-child(4).td-truncate { max-width: 130px; }
   /* Keep columns menu above customer cards but below modal overlays. */
-  #page-customers .ph,
   #page-leads .ph { position: relative; z-index: 90; }
   .customers-columns-wrap { position: relative; z-index: 91; }
   #customers-columns-panel {
@@ -845,6 +877,9 @@
   .stub-pop .md { width: 400px; padding: 24px 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
   .stub-pop .mt { margin-bottom: 10px; font-size: 1.0625rem; }
   .stub-pop .stub-body { font-size: 0.875rem; color: var(--text2); line-height: 1.55; margin-bottom: 20px; }
+
+  /* Dev admin modal */
+  .mo.dev-admin-pop { z-index: 125; }
 
   #dash-period-select { border-radius: 6px; }
   .hr > select.fi,
@@ -1322,34 +1357,30 @@
 </head>
 <body class="page-grain">
 
-<div id="auth-loading">
+<div id="auth-loading" style="display:none;">
   <span class="auth-loading-inner">
-    <span>Verifying session</span>
-    <span class="auth-dots" aria-hidden="true">
-      <span class="auth-dot"></span>
-      <span class="auth-dot"></span>
-      <span class="auth-dot"></span>
-    </span>
+    <span>Loading</span>
+    <span class="auth-dots" aria-hidden="true"><span class="auth-dot"></span><span class="auth-dot"></span><span class="auth-dot"></span></span>
   </span>
 </div>
-<div id="auth-login-shell">
+<div id="auth-login-shell" style="display:none;">
   <div class="gate-card">
-    <div class="pt" style="margin-bottom:8px;">Sign in</div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;">Sign in to use the dashboard.</p>
-    <div class="fg" style="grid-template-columns:1fr;gap:10px;margin-bottom:12px;">
+    <div class="pt">Sign in</div>
+    <p style="font-size:13px;color:var(--text2);margin-top:6px;">Sign in to continue to your workspace.</p>
+    <div id="gate-invite-hint" style="display:none;margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg3);font-size:12px;color:var(--text2);line-height:1.45;"></div>
+    <div class="fg" style="grid-template-columns:1fr;margin-top:14px;margin-bottom:0;">
       <div class="fgp"><label class="fl">Email</label><input class="fi" id="gate-email" type="email" autocomplete="email" placeholder="you@company.com" /></div>
       <div class="fgp"><label class="fl">Password</label><input class="fi" id="gate-password" type="password" autocomplete="current-password" placeholder="••••••••" /></div>
       <div class="fgp" id="gate-confirm-wrap" style="display:none;"><label class="fl">Confirm password</label><input class="fi" id="gate-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••" /></div>
     </div>
-    <div id="gate-auth-error" style="font-size:13px;color:var(--red);margin-bottom:12px;min-height:1.2em;"></div>
-    <div id="gate-invite-hint" style="display:none;font-size:13px;color:var(--text2);line-height:1.45;margin:-4px 0 12px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);"></div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+    <div id="gate-auth-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:10px;"></div>
+    <div class="hr" style="margin-top:12px;">
       <button type="button" class="btn btn-p" id="gate-signin">Sign in</button>
-      <button type="button" class="btn" id="gate-signup">Sign up</button>
+      <button type="button" class="btn" id="gate-google">Sign in with Google</button>
+      <button type="button" class="btn" id="gate-github">Sign in with GitHub</button>
+      <button type="button" class="btn" id="gate-forgot-password">Forgot password</button>
+      <button type="button" class="btn" id="gate-view-demo">View demo</button>
     </div>
-    <button type="button" class="btn" id="gate-forgot-password" style="width:100%;margin-bottom:10px;">Forgot password?</button>
-    <button type="button" class="btn" id="gate-github" style="width:100%;">Continue with GitHub</button>
-    <button type="button" class="btn" id="gate-view-demo" style="width:100%;margin-top:10px;">View Demo</button>
   </div>
 </div>
 
@@ -1357,827 +1388,474 @@
 <div id="app-invite-flash" style="display:none;margin:0;padding:10px 14px;font-size:13px;line-height:1.45;color:var(--text);background:var(--bg3);border-bottom:1px solid var(--border);"></div>
 <div class="mobile-topbar">
   <button type="button" id="btn-mobile-menu" class="mobile-menu-btn" aria-label="Open navigation" onclick="document.body.classList.toggle('mobile-nav-open')"><span></span></button>
-  <div class="mobile-topbar-title" id="mobile-title">Marketing</div>
+  <div class="mobile-topbar-title" id="mobile-title">Leads &amp; clients</div>
 </div>
 <div class="mobile-nav-overlay" id="mobile-nav-overlay" onclick="document.body.classList.remove('mobile-nav-open')"></div>
 <div class="sb">
-    <div class="sb-logo">
+  <div class="sb-logo">
     <img class="sb-brand-img" id="sb-brand-img" src="/runway-wordmark.svg" width="188" height="28" alt="Runway" loading="eager" decoding="async" />
   </div>
   <nav class="sb-nav">
-    <div class="nav-lbl">Overview</div>
-    <div class="ni active" data-nav="dashboard" onclick="nav('dashboard',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>Dashboard
+    <div class="nav-lbl">Dashboard</div>
+    <div class="ni active" data-nav="leads" onclick="nav('leads',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Leads / clients
     </div>
-    <div class="nav-lbl">CRM</div>
-    <div class="ni" data-nav="leads" onclick="nav('leads',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>Leads
+    <div class="ni" data-nav="campaigns" onclick="nav('campaigns',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 6-7"/></svg>
+      Campaigns
     </div>
-    <div class="ni" data-nav="customers" onclick="nav('customers',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>Clients
+    <div class="ni" data-nav="connections" onclick="nav('connections',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+      Connections
     </div>
-    <div class="nav-lbl">Acquisition</div>
-    <div class="ni" data-nav="performance" onclick="nav('performance',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>Campaigns
-    </div>
-    <div class="ni" data-nav="reports" onclick="nav('reports',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h8"/></svg>Reports
-    </div>
-    <div class="ni" data-nav="chat" onclick="nav('chat',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></svg>Advisor
+    <div class="nav-lbl ui-internal-facing">Developer</div>
+    <div class="ni ui-internal-facing" data-nav="manager" onclick="nav('manager',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11h6"/><path d="M20 8v6"/></svg>
+      Manager accounts
     </div>
     <div class="sb-spacer"></div>
-    <div class="sb-div"></div>
-    <div class="ni" data-nav="team" onclick="nav('team',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Your team
-    </div>
-    <div class="ni" data-nav="settings" onclick="nav('settings',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Settings
-    </div>
   </nav>
-  <div class="sb-user" id="sb-user-menu" title="Account" data-public-title="Account">
-    <div class="avatar" id="user-avatar">?</div>
-    <div style="min-width:0;flex:1;">
-      <div id="user-name" class="sb-user-name">—</div>
-      <div id="user-role" class="sb-user-role">—</div>
-      <button type="button" class="btn" id="btn-open-workspaces" style="margin-top:8px;width:100%;font-size:11px;padding:6px 8px;">Workspaces</button>
+  <div class="sb-user-wrap">
+    <div class="sb-user-menu" id="sb-user-dropdown" role="menu" aria-label="Profile menu">
+      <button type="button" class="sb-user-menu-item" id="btn-profile-settings" role="menuitem">
+        <span>Profile settings</span>
+        <span class="sb-user-menu-item-note">Soon</span>
+      </button>
+      <button type="button" class="sb-user-menu-item" id="btn-link-google" role="menuitem">
+        <span>Link Google</span>
+        <span class="sb-user-menu-item-note">OAuth</span>
+      </button>
+      <button type="button" class="sb-user-menu-item" id="btn-link-github" role="menuitem">
+        <span>Link GitHub</span>
+        <span class="sb-user-menu-item-note">OAuth</span>
+      </button>
+      <button type="button" class="sb-user-menu-item ui-internal-facing" id="btn-dev-admin" role="menuitem">
+        <span>Developer admin</span>
+        <span class="sb-user-menu-item-note">Internal</span>
+      </button>
+      <button type="button" class="sb-user-menu-item danger" id="btn-profile-logout" role="menuitem">Log out</button>
+    </div>
+    <div class="sb-user" id="sb-user-menu" aria-haspopup="menu" aria-expanded="false">
+      <div class="avatar" id="user-avatar">A</div>
+      <div style="min-width:0;flex:1;">
+        <div id="user-name" class="sb-user-name">Agency demo</div>
+        <div id="user-role" class="sb-user-role">Local mock data</div>
+      </div>
     </div>
   </div>
 </div>
 
 <div class="main mobile-main-offset">
 
-  <!-- DASHBOARD -->
-  <div class="pg on" id="page-dashboard">
+  <div class="pg on" id="page-leads">
     <div class="ph">
-      <div><div class="pt">Marketing overview</div><div class="ps" id="dash-subtitle">GA4 snapshot and workspace signals</div><div class="ps" id="dash-brand-tagline" style="display:none;font-size:12px;color:var(--text3);margin-top:4px;max-width:42rem;line-height:1.4;"></div></div>
+      <div>
+        <div class="pt">Leads &amp; clients</div>
+        <div class="ps">Who came in, what they paid, and which campaign gets credit.</div>
+      </div>
       <div class="hr">
-        <select class="fi" id="dash-period-select" style="width:160px;" title="Reporting period">
-          <option value="all">All-Time</option>
-        </select>
-        <button type="button" class="btn btn-p" id="btn-mkt-refresh-ga4">Refresh analytics</button>
+        <button type="button" class="btn btn-p" id="btn-add-lead">+ Add lead</button>
       </div>
     </div>
-    <div style="margin-bottom:10px;">
-      <div style="display:flex;align-items:flex-start;gap:14px;">
-        <div style="padding:2px 2px 0;">
-          <div class="st" id="crm-welcome">Good day</div>
-          <div class="ss" id="crm-local-date">—</div>
+    <div class="card mb" style="margin-bottom:16px;">
+      <div class="fg" style="margin-bottom:0;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-items:end;">
+        <div class="fgp"><label class="fl">Status</label>
+          <select class="fi" id="lead-filter-status"><option value="all">All</option><option value="lead">Lead</option><option value="closed">Closed sale</option></select>
         </div>
-      </div>
-    </div>
-    <div id="mkt-ga4-status" style="font-size:13px;color:var(--text3);margin-bottom:12px;">Analytics not loaded yet.</div>
-    <div class="kg kg-dash" style="grid-template-columns:repeat(6,minmax(0,1fr));">
-      <div class="kc hi"><div class="kl">Sessions</div><div class="kv" id="mkt-kpi-sessions">—</div><div class="kb bn" id="mkt-kpi-sessions-delta">Last 28d</div></div>
-      <div class="kc"><div class="kl">New users</div><div class="kv" id="mkt-kpi-newusers">—</div><div class="kb bn" id="mkt-kpi-newusers-delta">—</div></div>
-      <div class="kc"><div class="kl">Conv. rate</div><div class="kv" id="mkt-kpi-cvr">—</div><div class="kb bn" id="mkt-kpi-cvr-note">Conversions / sessions</div></div>
-      <div class="kc"><div class="kl">Engagement</div><div class="kv" id="mkt-kpi-engagement">—</div><div class="kb bn" id="mkt-kpi-avg-duration">Avg. session</div></div>
-      <div class="kc"><div class="kl">Leads (campaigns)</div><div class="kv" id="mkt-kpi-leads">—</div><div class="kb bn" id="mkt-kpi-leads-note">Sum on campaigns</div></div>
-      <div class="kc"><div class="kl">Top channel</div><div class="kv" id="mkt-kpi-topchannel" style="font-size:1rem;">—</div><div class="kb bn" id="mkt-kpi-cpl">CPL: set ad spend in settings</div></div>
-    </div>
-    <div class="gm">
-      <div class="card">
-        <div class="sh"><div class="st">Sessions by channel</div><div class="ss">Last 28 days · stacked by day</div></div>
-        <div class="cw" style="min-height:220px;"><canvas id="mk-dash-line"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="sh"><div class="st">Conversion rate by landing page</div><div class="ss">Top pages by traffic</div></div>
-        <div class="cw" style="min-height:220px;"><canvas id="mk-dash-bar"></canvas></div>
-      </div>
-    </div>
-    <div class="card mb" style="margin-top:12px;">
-      <div class="sh"><div class="st">Top campaigns (GA4)</div><div class="ss">By sessions</div></div>
-      <div id="mk-top-campaigns-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No campaign data yet.</div>
-      <table class="dt" id="mk-top-campaigns-table" style="display:none;">
-        <thead><tr><th>Campaign</th><th>Sessions</th></tr></thead>
-        <tbody id="mk-top-campaigns-body"></tbody>
-      </table>
-    </div>
-    <div class="card mb" style="margin-top:12px;">
-      <div class="sh" style="align-items:flex-start;gap:14px;">
-        <div><div class="st">Personable CRM</div><div class="ss">Suggestions, milestones, and quick weekly recaps</div></div>
-        <div class="hr">
-          <button type="button" class="btn" id="btn-generate-monday">Generate Monday summary</button>
-          <button type="button" class="btn" id="btn-generate-friday">Generate Friday recap</button>
+        <div class="fgp"><label class="fl">Campaign</label>
+          <select class="fi" id="lead-filter-campaign"><option value="all">All campaigns</option></select>
         </div>
+        <div class="fgp"><label class="fl">From</label><input class="fi" type="date" id="lead-filter-from" /></div>
+        <div class="fgp"><label class="fl">To</label><input class="fi" type="date" id="lead-filter-to" /></div>
       </div>
-      <div class="g2" style="margin-top:12px;grid-template-columns:1.3fr 1fr;">
-        <div>
-          <div class="st" style="font-size:13px;margin-bottom:8px;">Follow-up suggestions</div>
-          <div id="crm-suggestions-list" style="display:flex;flex-direction:column;gap:8px;"></div>
-        </div>
-        <div>
-          <div class="st" style="font-size:13px;margin-bottom:8px;">Milestones</div>
-          <div id="crm-milestones-list" style="display:flex;flex-direction:column;gap:8px;"></div>
-        </div>
-      </div>
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-        <div class="st" style="font-size:13px;margin-bottom:8px;">Latest summary</div>
-        <div id="crm-latest-summary" style="font-size:13px;color:var(--text2);">No summary generated yet.</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CRM: pipeline leads -->
-  <div class="pg" id="page-leads">
-    <div class="ph"><div><div class="pt">Leads</div><div class="ps">Early-stage pipeline — same records as CRM, filtered by status until you mark them Active, Retainer, or another account stage.</div></div><div class="hr"><input class="fi" id="leads-search" placeholder="Search leads…" style="width:220px;" title="Search by company, contact, email, status, industry, or notes" /><button type="button" class="btn" id="btn-leads-pipeline-export-csv">Export this list (CSV)</button><button type="button" class="btn btn-p" id="btn-add-lead">+ Add lead</button></div></div>
-    <div class="kg" style="grid-template-columns:repeat(3,1fr);">
-      <div class="kc hi"><div class="kl">Pipeline leads</div><div class="kv" id="lead-kpi-1">0</div><div class="kb bn" id="lead-kpi-1b">Qualification &amp; nurture</div></div>
-      <div class="kc"><div class="kl">Not exported</div><div class="kv" id="lead-kpi-2">0</div><div class="kb bn" id="lead-kpi-2b">Salesforce status</div></div>
-      <div class="kc"><div class="kl">With UTM data</div><div class="kv" id="lead-kpi-3">0</div><div class="kb bn" id="lead-kpi-3b">Any UTM field set</div></div>
     </div>
     <div class="card">
-      <div id="leads-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No pipeline leads — move prospects here with statuses like Pipeline or Lead, or add one below.</div>
+      <div id="leads-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No rows match your filters.</div>
       <table class="dt" id="leads-table" style="display:none;">
-        <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Lead source</th><th>UTM source</th><th>UTM medium</th><th>UTM campaign</th><th>Status</th><th>Industry</th><th>Next follow-up</th><th>Campaigns</th><th>Salesforce</th><th style="width:200px;">Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Status</th><th>Payment</th><th>Keyword</th><th>GA4 Client ID</th><th>Campaign</th><th>Date added</th><th style="width:120px;"></th></tr></thead>
         <tbody id="leads-tbody"></tbody>
       </table>
     </div>
-    <div class="card" style="margin-top:12px;">
-      <div class="sh"><div class="st">Pipeline reminders</div><div class="ss">Touch dates for leads on this list only</div></div>
-      <div id="leads-reminders-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
-      <div id="leads-events-timeline" style="display:flex;flex-direction:column;gap:8px;"></div>
-    </div>
   </div>
 
-  <!-- CRM: clients -->
-  <div class="pg" id="page-customers">
-    <div class="ph"><div><div class="pt">Clients</div><div class="ps">Active accounts and retainers — contacts, touchpoints, and campaign links. New prospects stay on Leads until you set status to Active (or Retainer). Export a Salesforce-ready CSV anytime.</div></div><div class="hr"><input class="fi" id="customers-search" placeholder="Search clients…" style="width:220px;" title="Search by company, contact, email, status, industry, or notes" /><div class="customers-columns-wrap"><button type="button" class="btn" id="btn-customers-columns">Columns</button><div id="customers-columns-panel" aria-label="Choose visible columns"></div></div><button type="button" class="btn" id="btn-leads-export-csv">Export Salesforce CSV</button><button type="button" class="btn btn-p" id="btn-add-client">+ Add client</button></div></div>
-    <div class="kg" style="grid-template-columns:repeat(3,1fr);">
-      <div class="kc"><div class="kl">Total clients</div><div class="kv" id="cust-kpi-1">0</div><div class="kb bn" id="cust-kpi-1b">In this workspace</div></div>
-      <div class="kc hi"><div class="kl">Not exported</div><div class="kv" id="cust-kpi-2">0</div><div class="kb bn" id="cust-kpi-2b">Salesforce status</div></div>
-      <div class="kc"><div class="kl">With UTM data</div><div class="kv" id="cust-kpi-3">0</div><div class="kb bn" id="cust-kpi-3b">Any UTM field set</div></div>
+  <div class="pg" id="page-campaigns">
+    <div class="ph">
+      <div>
+        <div class="pt">Campaigns</div>
+        <div class="ps">Spend vs closed revenue; ROI from leads. When GA4 is connected, session and conversion totals from the Data API appear on each card.</div>
+      </div>
+      <div class="hr">
+        <button type="button" class="btn btn-p" id="btn-add-campaign">+ Add campaign</button>
+      </div>
     </div>
-    <div class="card">
-      <div id="customers-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No clients yet.</div>
-      <table class="dt" id="customers-table" style="display:none;">
-        <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Lead source</th><th>UTM source</th><th>UTM medium</th><th>UTM campaign</th><th>Status</th><th>Industry</th><th>Next follow-up</th><th>Campaigns</th><th>Salesforce</th><th style="width:200px;">Actions</th></tr></thead>
-        <tbody id="customers-tbody"></tbody>
-      </table>
+    <div id="campaigns-ga4-toolbar" class="card mb" style="margin-bottom:16px;display:none;">
+      <div class="st" style="font-size:13px;margin-bottom:10px;">GA4 report range</div>
+      <div class="fg" style="margin-bottom:0;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-items:end;">
+        <div class="fgp"><label class="fl">From</label><input class="fi" type="date" id="camp-ga4-start" /></div>
+        <div class="fgp"><label class="fl">To</label><input class="fi" type="date" id="camp-ga4-end" /></div>
+        <div class="fgp" style="align-self:end;"><button type="button" class="btn btn-p" id="btn-camp-ga4-apply">Apply &amp; refresh</button></div>
+      </div>
+      <p class="ss" style="margin-top:10px;margin-bottom:0;">Same fixed Data API query as Connections → Sync. Campaign cards match GA4 rows on <strong>campaign name</strong> (case-insensitive).</p>
     </div>
-    <div class="card" style="margin-top:12px;">
-      <div class="sh"><div class="st">Relationship timeline</div><div class="ss">Recent outreach and reminders</div></div>
-      <div id="crm-reminders-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
-      <div id="crm-events-timeline" style="display:flex;flex-direction:column;gap:8px;"></div>
-    </div>
+    <div id="campaigns-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;"></div>
   </div>
 
-  <!-- CAMPAIGNS (projects) -->
-  <div class="pg" id="page-performance">
-    <div class="ph"><div><div class="pt">Campaigns</div><div class="ps">Programs and spend tracked on projects</div></div><div class="hr"><button type="button" class="btn" id="btn-manage-statuses">Manage statuses</button><button type="button" class="btn btn-p" id="btn-add-project">+ Add campaign</button></div></div>
-    <div class="kg">
-      <div class="kc hi"><div class="kl">Active campaigns</div><div class="kv" id="perf-kpi-1">0</div><div class="kb bn" id="perf-kpi-1b">Not ended</div></div>
-      <div class="kc"><div class="kl">Total budget</div><div class="kv" id="perf-kpi-2">—</div><div class="kb bn" id="perf-kpi-2b">Planned spend</div></div>
-      <div class="kc"><div class="kl">Leads generated</div><div class="kv" id="perf-kpi-3">—</div><div class="kb bn" id="perf-kpi-3b">From campaign rows</div></div>
-      <div class="kc"><div class="kl">Channels in use</div><div class="kv" id="perf-kpi-4">—</div><div class="kb bn" id="perf-kpi-4b">Distinct values</div></div>
-    </div>
-    <div class="g2 mb">
-      <div class="card"><div class="sh"><div class="st">Campaigns by channel</div></div><div class="cw"><canvas id="cSvc"></canvas></div></div>
-      <div class="card"><div class="sh"><div class="st">Starts by month</div></div><div class="cw"><canvas id="cDel"></canvas></div></div>
-    </div>
-    <div class="card">
-      <div class="sh"><div class="st">Campaign list</div></div>
-      <div id="projects-empty" style="font-size:13px;color:var(--text3);padding:8px 0;">No campaigns yet.</div>
-      <table class="dt" id="projects-table" style="display:none;">
-        <thead><tr><th>Campaign</th><th>Client</th><th>Channel</th><th>Description</th><th>Due</th><th>Budget</th><th>Leads</th><th>Status</th><th style="min-width:120px;">Case study</th><th style="width:160px;">Actions</th></tr></thead>
-        <tbody id="projects-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- REPORTS -->
-  <div class="pg" id="page-reports">
-    <div class="ph"><div><div class="pt">Reports</div><div class="ps">GA4 slices by topic · cached for one hour server-side</div></div><div class="hr"><button type="button" class="btn btn-p" id="btn-reports-refresh">Refresh tab</button></div></div>
-    <div class="hr" style="margin-bottom:20px;flex-wrap:wrap;gap:8px;">
-      <button type="button" class="btn reports-tab-btn on" data-reports-tab="channel_performance">Channel performance</button>
-      <button type="button" class="btn reports-tab-btn" data-reports-tab="audience">Audience</button>
-      <button type="button" class="btn reports-tab-btn" data-reports-tab="campaign_roi">Campaign ROI</button>
-      <button type="button" class="btn reports-tab-btn" data-reports-tab="attribution">Attribution</button>
-    </div>
-    <div id="reports-tab-panel" class="card" style="min-height:280px;">
-      <div id="reports-tab-status" style="font-size:13px;color:var(--text3);margin-bottom:12px;">Pick a tab to load data.</div>
-      <div id="reports-tab-body" style="font-size:13px;color:var(--text2);line-height:1.5;"></div>
-    </div>
-  </div>
-
-  <!-- CHAT: single shell — transcript, composer, chips (ChatGPT-style workspace) -->
-  <div class="pg" id="page-chat">
-    <div class="chat-shell">
-      <header class="chat-shell-header">
-        <p class="chat-shell-title">Advisor</p>
-        <p class="chat-shell-sub">Marketing copilot for this workspace. Uses GA4 snapshots, campaigns, and leads to suggest priorities and copy.</p>
-        <p class="chat-shell-sub-mobile">Marketing copilot — GA4, campaigns, and leads at a glance.</p>
-      </header>
-      <div class="chat-transcript">
-        <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
-      </div>
-      <div class="chat-composer-stack">
-        <p class="chat-prompt-heading">Choose a task or type a request</p>
-        <div class="chat-prompt-box" id="chat-prompt-box" role="group" aria-label="Message composer">
-          <input type="file" id="chat-file-input" class="chat-file-input-hidden" accept="image/*" tabindex="-1" aria-hidden="true" />
-          <div id="chat-image-preview-wrap" class="chat-image-preview-wrap" hidden>
-            <button type="button" id="chat-image-thumb-btn" class="chat-image-thumb-btn" style="border:none;padding:0;background:none;" aria-label="View full image">
-              <img id="chat-image-thumb" src="" alt="Attached preview" />
-            </button>
-            <button type="button" class="chat-image-preview-remove" id="chat-image-remove" aria-label="Remove image">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-          </div>
-          <textarea id="chat-input" class="chat-prompt-ta" rows="1" placeholder="Describe the outcome you want (e.g. weekly recap)." maxlength="2000" autocomplete="off"></textarea>
-          <div class="chat-prompt-toolbar">
-            <button type="button" class="chat-prompt-icon-btn" id="chat-attach-btn" title="Attach image" aria-label="Attach image">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-            </button>
-            <div class="chat-tools-wrap">
-              <button type="button" class="chat-prompt-tools-trigger" id="chat-tools-trigger" aria-expanded="false" aria-haspopup="true" title="Explore tools">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
-                <span id="chat-tools-label">Tools</span>
-              </button>
-              <div id="chat-tools-pop" class="chat-tools-pop" hidden role="menu" aria-label="Tools">
-                <button type="button" class="chat-tool-row" data-chat-tool="createImage" role="menuitem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                  <span>Create an image</span>
-                </button>
-                <button type="button" class="chat-tool-row" data-chat-tool="searchWeb" role="menuitem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                  <span>Search the web</span>
-                </button>
-                <button type="button" class="chat-tool-row" data-chat-tool="writeCode" role="menuitem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
-                  <span>Write or code</span>
-                </button>
-                <button type="button" class="chat-tool-row" data-chat-tool="deepResearch" role="menuitem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-                  <span>Run deep research</span><span class="chat-tool-row-extra">N/A</span>
-                </button>
-                <button type="button" class="chat-tool-row" data-chat-tool="thinkLonger" role="menuitem">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
-                  <span>Think for longer</span>
-                </button>
-              </div>
-            </div>
-            <div class="chat-active-tool" id="chat-active-tool" hidden>
-              <span class="chat-active-tool-divider" aria-hidden="true"></span>
-              <button type="button" class="chat-active-tool-chip" id="chat-active-tool-clear" title="Clear tool">
-                <span id="chat-active-tool-icon"></span>
-                <span id="chat-active-tool-name"></span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </button>
-            </div>
-            <div class="chat-prompt-toolbar-spacer"></div>
-            <button type="button" class="chat-prompt-icon-btn" id="chat-mic-btn" title="Voice input isn’t available in this dashboard" aria-label="Voice input unavailable">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></svg>
-            </button>
-            <button type="button" class="chat-prompt-send" id="chat-send" disabled title="Send" aria-label="Send message">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="chat-starters" id="chat-starters">
-        <button type="button" class="chat-chip" data-advisor-task="daily_brief" data-chat-q="Generate my daily marketing action brief">Daily action brief</button>
-        <button type="button" class="chat-chip" data-advisor-task="followup_draft" data-chat-q="Draft a follow-up email to a warm lead">Follow-up draft</button>
-        <button type="button" class="chat-chip" data-advisor-task="variance_explain" data-chat-q="Explain week-over-week change in sessions and conversion rate">Variance explanation</button>
-        <button type="button" class="chat-chip" data-advisor-task="weekly_recap" data-chat-q="Generate this week's marketing recap">Weekly recap</button>
+  <div class="pg" id="page-connections">
+    <div class="ph">
+      <div>
+        <div class="pt">Connections</div>
+        <div class="ps">Connect data sources once. GA4 credentials stay on your API server only.</div>
       </div>
     </div>
-    <div class="chat-lightbox" id="chat-lightbox" hidden role="dialog" aria-modal="true" aria-label="Image preview">
-      <button type="button" class="chat-lightbox-close" id="chat-lightbox-close" aria-label="Close">&times;</button>
-      <img id="chat-lightbox-img" src="" alt="Full size attachment" />
-    </div>
-  </div>
-
-  <!-- YOUR TEAM -->
-  <div class="pg" id="page-team">
-    <div class="ph"><div><div class="pt">Your team</div><div class="ps">People and roles for this workspace only.</div></div></div>
-    <div class="g2">
-      <div class="card">
-        <div class="fst">Members</div>
-        <p id="team-page-hint" style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;"></p>
-        <div style="overflow:auto;">
-          <table class="dt" id="team-members-table" style="width:100%;">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th id="team-th-actions" style="display:none;width:200px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="team-members-body"></tbody>
-          </table>
+    <div class="g2" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr));">
+      <!-- Future: POST /api/crm/sync — payload { name, email, leadStatus, clientId, campaignId, keyword }; clientId === GA4 ga_client_id for joins -->
+      <div class="card" id="conn-card-crm">
+        <div class="sh" style="margin-bottom:8px;"><div class="st">Internal CRM</div></div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">Use your internal CRM <code style="font-size:11px;">clients</code> table as the source for campaign tracking. Only rows with a CRM/GA client ID are included.</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span id="conn-crm-dot" style="width:10px;height:10px;border-radius:50%;background:var(--neutral);"></span>
+          <span id="conn-crm-status" style="font-size:13px;font-weight:600;color:var(--text3);">Not connected</span>
         </div>
-      </div>
-      <div class="card" id="team-invite-card" style="display:none;">
-        <div class="fst">Invite by email</div>
-        <p style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;">Creates a 7-day link you can send from your own email. They must sign in with the same address. Existing users can be added instantly with &quot;Add existing user&quot;.</p>
-        <div class="fg" style="margin-bottom:10px;">
-          <div class="fgp"><label class="fl">Email</label><input class="fi" id="team-invite-email" type="email" placeholder="name@company.com" /></div>
-          <div class="fgp"><label class="fl">Role</label>
-            <select class="fi" id="team-invite-role">
-              <option value="member">Employee</option>
-              <option value="admin">Admin</option>
-              <option value="viewer">Viewer (read-only)</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-          <button type="button" class="btn btn-p" id="team-btn-create-invite">Create invite link</button>
-          <button type="button" class="btn" id="team-btn-add-existing">Add existing user</button>
-        </div>
-        <div id="team-invite-result" style="font-size:12px;color:var(--text2);word-break:break-all;display:none;"></div>
-      </div>
-      <div class="card" id="team-pending-invites-card" style="display:none;">
-        <div class="fst">Pending invitations</div>
-        <div id="team-pending-invites-body" style="font-size:13px;"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SETTINGS -->
-  <div class="pg" id="page-settings">
-    <div class="ph"><div><div class="pt">Settings</div><div class="ps">Business profile and preferences</div></div><button type="button" class="btn btn-p" id="btn-save-settings">Save Changes</button></div>
-    <div class="g2">
-      <div class="card">
-        <div class="fst">Business Info</div>
-        <div class="fg">
-          <div class="fgp"><label class="fl">Business Name</label><input class="fi" id="setting-name" /></div>
-          <div class="fgp"><label class="fl">Owner Name</label><input class="fi" id="setting-owner" /></div>
-          <div class="fgp"><label class="fl">Your role (optional)</label><input class="fi" id="setting-owner-role" placeholder="e.g. Founder" /></div>
-          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Tagline (optional)</label><textarea class="fi" id="setting-tagline" rows="2" placeholder="Short line under your business name on the dashboard" style="min-height:56px;resize:vertical;"></textarea></div>
-          <div class="fgp"><label class="fl">Email</label><input class="fi" id="setting-email" type="email" /></div>
-          <div class="fgp"><label class="fl">Phone</label><input class="fi" id="setting-phone" /></div>
-          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Address</label><input class="fi" id="setting-address" /></div>
-          <div class="fgp"><label class="fl">Dashboard period label</label><input class="fi" id="setting-period" placeholder="e.g. March 2026" /></div>
-          <div class="fgp"><label class="fl">Accent color</label><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><input class="fi" id="setting-accent" type="color" value="#d4f542" title="Color picker" style="min-height:40px;min-width:52px;padding:4px 8px;flex-shrink:0;" /><input class="fi" id="setting-accent-hex" type="text" value="#d4f542" inputmode="text" autocomplete="off" spellcheck="false" maxlength="7" placeholder="#3366cc" title="Hex value (#rgb or #rrggbb)" style="max-width:9rem;font-variant-numeric:tabular-nums;" /></div></div>
-          <div class="fgp"><label class="fl">Logo (light mode)</label><input class="fi" id="setting-logo-light" type="file" accept="image/*" /></div>
-          <div class="fgp"><label class="fl">Logo (dark mode)</label><input class="fi" id="setting-logo-dark" type="file" accept="image/*" /></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="fst">Financial Defaults</div>
-        <div class="fg">
-          <div class="fgp"><label class="fl">Invoice Terms (days)</label><input class="fi" id="setting-terms" type="number" value="30" /></div>
-          <div class="fgp"><label class="fl">Default Tax Rate (%)</label><input class="fi" id="setting-tax" type="number" value="0" /></div>
-          <div class="fgp"><label class="fl">Currency</label><select class="fi" id="setting-currency"><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
-          <div class="fgp"><label class="fl">Fiscal Year Start</label><select class="fi" id="setting-fiscal"><option>January</option><option>October</option></select></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="fst">Monthly Budgets</div>
-        <p style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:14px;">Set a monthly spending target per expense category. Progress is shown on the Expenses page.</p>
-        <div class="fg">
-          <div class="fgp"><label class="fl">Labor ($)</label><input class="fi" id="budget-input-lab" type="number" min="0" step="1" placeholder="e.g. 5000" /></div>
-          <div class="fgp"><label class="fl">Software &amp; Tools ($)</label><input class="fi" id="budget-input-sw" type="number" min="0" step="1" placeholder="e.g. 500" /></div>
-          <div class="fgp"><label class="fl">Advertising ($)</label><input class="fi" id="budget-input-ads" type="number" min="0" step="1" placeholder="e.g. 2000" /></div>
-          <div class="fgp"><label class="fl">Other ($)</label><input class="fi" id="budget-input-oth" type="number" min="0" step="1" placeholder="e.g. 300" /></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="fst">Cloud Sync</div>
-        <div class="fg">
-          <div id="settings-cloud-status" style="font-size:11px;color:var(--text3);margin-bottom:10px;">Cloud: not configured</div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button type="button" class="btn btn-p" id="settings-btn-cloud-auth" style="flex:1;font-size:11px;padding:7px 10px;">Sign in</button>
-            <button type="button" class="btn" id="settings-btn-cloud-sync" style="flex:1;font-size:11px;padding:7px 10px;" disabled>Sync</button>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:10px;">
-            Data syncs to your workspace in the cloud (per organization). Open your workspace URL on each device and sign in with the <strong>same email</strong>. Use <strong>Sync</strong> on the dashboard to refresh from the server.
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="fst">Data import &amp; export</div>
-        <p style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;">Import a bank CSV into the transaction log, or export a journal CSV for spreadsheets or your accountant. Use <strong>Undo last import</strong> if something looks wrong.</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <button type="button" class="btn" id="btn-csv-import-open-settings">Import CSV</button>
-          <button type="button" class="btn" id="btn-journal-export-open-settings">Export journal CSV</button>
-          <button type="button" class="btn" id="btn-undo-last-import-settings" disabled>Undo last import</button>
+          <button type="button" class="btn btn-p" id="btn-crm-connect-internal">Use Internal CRM</button>
+          <button type="button" class="btn" id="btn-crm-disconnect">Disconnect</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sh" style="margin-bottom:8px;"><div class="st">Google Sheets / CSV</div></div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">Import rows and map columns to name, status, payment, keyword, and campaign. Preview before saving.</p>
+        <button type="button" class="btn btn-p" id="btn-conn-csv-open">Import CSV</button>
+      </div>
+      <div class="card" id="conn-card-ga4">
+        <div class="sh" style="margin-bottom:8px;"><div class="st">Google Analytics 4</div></div>
+        <div id="conn-ga4-state-a">
+          <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:10px;">Connect once: your <strong>numeric Property ID</strong> and a <strong>service account JSON</strong> key. They stay on the API server until you disconnect — no Google sign-in each visit.</p>
+          <div class="hr" style="margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <a class="btn" style="font-size:12px;padding:6px 10px;text-decoration:none;display:inline-flex;align-items:center;" href="https://support.google.com/analytics/answer/9539598" target="_blank" rel="noopener noreferrer">Find Property ID</a>
+            <a class="btn" style="font-size:12px;padding:6px 10px;text-decoration:none;display:inline-flex;align-items:center;" href="https://cloud.google.com/iam/docs/keys-create-delete#creating" target="_blank" rel="noopener noreferrer">Create JSON key</a>
+          </div>
+          <details style="font-size:12px;color:var(--text3);line-height:1.55;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;background:var(--bg3);">
+            <summary style="cursor:pointer;font-weight:600;color:var(--text2);">Quick setup</summary>
+            <ol style="margin:10px 0 0 18px;padding:0;">
+              <li style="margin-bottom:6px;">Open <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer">Google Cloud → Service accounts</a> (pick the same project as GA4 if linked).</li>
+              <li style="margin-bottom:6px;">Create a service account → <strong>Keys</strong> → <strong>Add key</strong> → <strong>JSON</strong> and download the file. In the <strong>same</strong> Google Cloud project, open <strong>APIs &amp; Services</strong> → <strong>Library</strong> and enable <strong>Google Analytics Data API</strong> (required for reports).</li>
+              <li style="margin-bottom:6px;">In <a href="https://analytics.google.com/" target="_blank" rel="noopener noreferrer">GA4</a> → <strong>Admin</strong> → <strong>Property access management</strong> → <strong>+</strong> → add the exact <code style="font-size:11px;">client_email</code> from your JSON with <strong>Viewer</strong> or <strong>Analyst</strong> on this property. (Grant access here in Analytics, not only under Google Cloud → IAM.)</li>
+              <li style="margin-bottom:6px;">In GA4 → <strong>Admin</strong>, use the <strong>property</strong> dropdown in the left sidebar, open <strong>Property details</strong>, then find the numeric <strong>Property ID</strong> in your account profile (top right; digits only).</li>
+              <li>Paste the Property ID below and upload or paste the JSON, then click <strong>Connect GA4</strong>.</li>
+            </ol>
+          </details>
+          <div class="fgp" style="margin-bottom:10px;"><label class="fl">GA4 Property ID</label><input class="fi" id="conn-ga4-property-id" inputmode="numeric" placeholder="123456789" autocomplete="off" /></div>
+          <div class="fgp" style="margin-bottom:10px;">
+            <label class="fl">Service account JSON</label>
+            <input type="file" class="fi" id="conn-ga4-sa-file" accept=".json,application/json" />
+          </div>
+          <div class="fgp" style="margin-bottom:12px;">
+            <label class="fl">Or paste JSON</label>
+            <textarea class="fi" id="conn-ga4-sa-paste" rows="5" placeholder="{ &quot;type&quot;: &quot;service_account&quot;, ... }" style="font-family:var(--font-mono);font-size:11px;resize:vertical;"></textarea>
+          </div>
+          <div id="conn-ga4-connect-err" style="font-size:12px;color:var(--red);margin-bottom:10px;min-height:1em;"></div>
+          <button type="button" class="btn btn-p" id="btn-ga4-connect">Connect GA4</button>
+        </div>
+        <div id="conn-ga4-state-b" style="display:none;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span id="conn-ga4-dot" style="width:10px;height:10px;border-radius:50%;background:var(--green);"></span>
+            <span style="font-size:13px;font-weight:600;">Connected</span>
+          </div>
+          <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:6px;"><span id="conn-ga4-prop-label"></span></p>
+          <p style="font-size:12px;color:var(--text3);margin-bottom:6px;">Last synced: <span id="conn-ga4-last-sync">—</span></p>
+          <p style="font-size:11px;color:var(--text3);line-height:1.45;margin-bottom:12px;">Campaign and lead data refresh automatically about every hour while you use the app (or when you return to Campaigns / Connections). No need to reconnect.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="button" class="btn btn-p" id="btn-ga4-sync-now">Refresh now</button>
+            <button type="button" class="btn" id="btn-ga4-disconnect">Disconnect</button>
+          </div>
+        </div>
+      </div>
+      <!-- Future: Salesforce REST + custom field for ga_client_id on Lead; join to GA4 rows same as CRM -->
+      <div class="card" id="conn-card-sf">
+        <div class="sh" style="margin-bottom:8px;"><div class="st">Salesforce</div></div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">Salesforce source mode (coming next). Selecting this source keeps Leads empty until Salesforce sync is implemented.</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span id="conn-sf-dot" style="width:10px;height:10px;border-radius:50%;background:var(--neutral);"></span>
+          <span id="conn-sf-status" style="font-size:13px;font-weight:600;color:var(--text3);">Not connected</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn" id="btn-crm-connect-salesforce">Use Salesforce (placeholder)</button>
         </div>
       </div>
     </div>
   </div>
 
-</div>
-
-<!-- Bank CSV import wizard -->
-<div class="mo" id="csvImportModal">
-  <div class="md" style="max-width:720px;max-height:92vh;display:flex;flex-direction:column;">
-    <div class="mt">Import bank CSV</div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:14px;">Choose a CSV export from your bank, map columns once, preview rows, then import. Amounts follow the same rules as manual transactions (positive amounts; category sets revenue vs expense).</p>
-    <div id="imp-step-1" class="imp-step" style="flex:1;min-height:0;display:flex;flex-direction:column;">
-      <label class="fl">CSV file</label>
-      <input type="file" class="fi" id="imp-file" accept=".csv,text/csv" />
-      <div id="imp-file-status" style="font-size:12px;margin-top:10px;color:var(--text3);"></div>
-    </div>
-    <div id="imp-step-2" class="imp-step" style="display:none;flex:1;min-height:0;overflow:auto;">
-      <div class="fg" style="margin-bottom:12px;">
-        <div class="fgp" style="grid-column:1/-1;">
-          <label class="fl">Amount columns</label>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);"><input type="radio" name="imp-amount-mode" id="imp-amount-mode-single" value="single" checked /> Single signed amount (negative = outflow)</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);"><input type="radio" name="imp-amount-mode" id="imp-amount-mode-split" value="split" /> Separate Debit / Credit</label>
-          </div>
-        </div>
-        <div class="fgp" id="imp-wrap-col-date"><label class="fl">Date column</label><select class="fi" id="imp-col-date"></select></div>
-        <div class="fgp" id="imp-wrap-col-amount"><label class="fl">Amount column</label><select class="fi" id="imp-col-amount"></select></div>
-        <div class="fgp" id="imp-wrap-col-debit" style="display:none;"><label class="fl">Debit column</label><select class="fi" id="imp-col-debit"></select></div>
-        <div class="fgp" id="imp-wrap-col-credit" style="display:none;"><label class="fl">Credit column</label><select class="fi" id="imp-col-credit"></select></div>
-        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Description / memo</label><select class="fi" id="imp-col-description"></select></div>
-        <div class="fgp"><label class="fl">External ID (optional)</label><select class="fi" id="imp-col-external"></select></div>
-        <div class="fgp"><label class="fl">Default expense category</label>
-          <select class="fi" id="imp-default-exp-cat">
-            <option value="infer">Auto from description</option>
-            <option value="lab">Labor</option>
-            <option value="sw">Software &amp; tools</option>
-            <option value="ads">Advertising</option>
-            <option value="oth">Other</option>
-          </select>
-        </div>
-        <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="imp-import-revenue" /><label class="fl" for="imp-import-revenue" style="margin:0;">Also import inflows (credits) as revenue</label>
-        </div>
-        <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="imp-skip-dupes" checked /><label class="fl" for="imp-skip-dupes" style="margin:0;">Skip rows that look like duplicates (same date, amount, and description)</label>
-        </div>
+  <div class="pg ui-internal-facing" id="page-manager">
+    <div class="ph">
+      <div>
+        <div class="pt">Manager accounts</div>
+        <div class="ps">Developer-only: organizations, admins, and user provisioning.</div>
+      </div>
+      <div class="hr">
+        <button type="button" class="btn btn-p" id="btn-mgr-refresh">Refresh</button>
+        <button type="button" class="btn" id="btn-mgr-open-admin">Create org / invite</button>
       </div>
     </div>
-    <div id="imp-step-3" class="imp-step" style="display:none;flex:1;min-height:0;flex-direction:column;">
-      <div id="imp-preview-summary" style="font-size:13px;margin-bottom:10px;color:var(--text2);"></div>
-      <div style="overflow:auto;max-height:340px;border:1px solid var(--border);border-radius:var(--rl);">
-        <table class="dt" style="margin:0;">
-          <thead><tr><th>Date</th><th>Flow</th><th>Category</th><th>Amount</th><th>Description</th></tr></thead>
-          <tbody id="imp-preview-body"></tbody>
+
+    <div class="card mb" style="margin-bottom:16px;">
+      <div class="st" style="font-size:13px;margin-bottom:10px;">Organizations</div>
+      <div id="mgr-orgs-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-bottom:10px;"></div>
+      <div style="overflow:auto;">
+        <table class="dt" id="mgr-orgs-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Slug</th>
+              <th>Admin email</th>
+              <th>Members</th>
+              <th style="width:120px;"></th>
+            </tr>
+          </thead>
+          <tbody id="mgr-orgs-tbody"></tbody>
         </table>
       </div>
     </div>
-    <div class="mf" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;flex-shrink:0;">
-      <button type="button" class="btn" id="imp-cancel">Cancel</button>
-      <button type="button" class="btn" id="imp-back" style="display:none;">Back</button>
-      <button type="button" class="btn btn-p" id="imp-next">Next</button>
-      <button type="button" class="btn btn-p" id="imp-commit" style="display:none;">Import</button>
-    </div>
-  </div>
-</div>
 
-<!-- Journal CSV export -->
-<div class="mo" id="journalExportModal">
-  <div class="md" style="max-width:520px;">
-    <div class="mt">Export journal CSV</div>
-    <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:14px;">Download ledger lines for a date range. Uses the same categories as your dashboard.</p>
-    <div class="fg" style="margin-bottom:16px;">
-      <div class="fgp"><label class="fl">Start date</label><input class="fi" id="journal-exp-start" type="date" /></div>
-      <div class="fgp"><label class="fl">End date</label><input class="fi" id="journal-exp-end" type="date" /></div>
-      <div class="fgp" style="grid-column:1/-1;">
-        <label class="fl">Format</label>
-        <select class="fi" id="journal-exp-format">
-          <option value="simple">Simple journal (one amount column)</option>
-          <option value="split">Debit / Credit columns</option>
-        </select>
-      </div>
-    </div>
-    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
-      <button type="button" class="btn" id="journal-exp-cancel">Cancel</button>
-      <button type="button" class="btn btn-p" id="journal-exp-download">Download CSV</button>
-    </div>
-  </div>
-</div>
-
-<!-- Non-functional action notice -->
-<div class="mo stub-pop" id="stubFeatureModal" onclick="if (event.target === this) this.classList.remove('on')">
-  <div class="md" onclick="event.stopPropagation()">
-    <div class="mt" id="stubFeatureTitle">Coming soon</div>
-    <p class="stub-body" id="stubFeatureBody">This action is not available in this version yet.</p>
-    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
-      <button type="button" class="btn btn-p" id="stubFeatureOk">OK</button>
-    </div>
-  </div>
-</div>
-
-<!-- Cloud auth -->
-<div class="mo" id="cloudAuthModal">
-  <div class="md" style="max-width:420px;">
-    <div class="mt" id="cloud-auth-heading">Sign in to cloud sync</div>
-    <div class="fg" style="grid-template-columns:1fr;gap:10px;">
-      <div class="fgp"><label class="fl">Email</label><input class="fi" id="cloud-auth-email" type="email" placeholder="you@company.com" /></div>
-      <div class="fgp"><label class="fl">Password</label><input class="fi" id="cloud-auth-password" type="password" placeholder="••••••••" /></div>
-    </div>
-    <div class="mf" style="margin-top:16px;">
-      <button type="button" class="btn" id="btn-cloud-auth-cancel">Cancel</button>
-      <button type="button" class="btn" id="btn-cloud-auth-signup">Sign up</button>
-      <button type="button" class="btn btn-p" id="btn-cloud-auth-signin">Sign in</button>
-      <button type="button" class="btn btn-p" id="btn-cloud-auth-github" style="flex:1;">Continue with GitHub</button>
-    </div>
-  </div>
-</div>
-
-<!-- Client CRUD -->
-<div class="mo" id="clientModal">
-  <div class="md">
-    <div class="mt" id="client-modal-title">Add client</div>
-    <input type="hidden" id="client-edit-id" value="" />
-    <div class="fg" style="margin-bottom:16px;">
-      <div class="fgp"><label class="fl">Account / Company name *</label><input class="fi" id="client-company" /></div>
-      <div class="fgp"><label class="fl">Status</label><input class="fi" id="client-status" placeholder="e.g. Active, Lead" /></div>
-      <div class="fgp"><label class="fl">Salutation</label><input class="fi" id="client-salutation" placeholder="e.g. Mr., Ms., Dr." /></div>
-      <div class="fgp"><label class="fl">First name</label><input class="fi" id="client-first-name" /></div>
-      <div class="fgp"><label class="fl">Last name</label><input class="fi" id="client-last-name" /></div>
-      <div class="fgp"><label class="fl">Contact name (display)</label><input class="fi" id="client-contact" placeholder="Auto from first + last if blank" /></div>
-      <div class="fgp"><label class="fl">Title</label><input class="fi" id="client-title" /></div>
-      <div class="fgp"><label class="fl">Reports to</label><input class="fi" id="client-reports-to" placeholder="Manager / primary contact" /></div>
-      <div class="fgp"><label class="fl">Industry / Vertical</label><input class="fi" id="client-industry" list="client-industry-list" autocomplete="off" placeholder="Type or pick a suggestion" /><datalist id="client-industry-list"></datalist></div>
-      <div class="fgp"><label class="fl">Lead source</label><input class="fi" id="client-lead-source" placeholder="e.g. Webinar, Partner" /></div>
-      <div class="fgp"><label class="fl">UTM source</label><input class="fi" id="client-utm-source" /></div>
-      <div class="fgp"><label class="fl">UTM medium</label><input class="fi" id="client-utm-medium" /></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">UTM campaign</label><input class="fi" id="client-utm-campaign" /></div>
-      <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="client-retainer" /><label class="fl" for="client-retainer" style="margin:0;">Retainer (legacy flag)</label>
-      </div>
-      <div class="fgp"><label class="fl">Email</label><input class="fi" id="client-email" type="email" /></div>
-      <div class="fgp"><label class="fl">Phone</label><input class="fi" id="client-phone" /></div>
-      <div class="fgp" style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-        <input type="checkbox" id="client-email-opt-out" /><label class="fl" for="client-email-opt-out" style="margin:0;">Email opt out</label>
-      </div>
-      <div class="fgp"><label class="fl">Contact owner</label><input class="fi" id="client-owner" placeholder="Internal owner" /></div>
-      <div class="fgp"><label class="fl">Birthday</label><input class="fi" id="client-birthday" type="date" /></div>
-      <div class="fgp"><label class="fl">Preferred channel</label><input class="fi" id="client-preferred-channel" placeholder="e.g. Email, Phone, Slack" /></div>
-      <div class="fgp"><label class="fl">Communication style</label><input class="fi" id="client-communication-style" placeholder="e.g. Concise, Detailed" /></div>
-      <div class="fgp"><label class="fl">Last touch date</label><input class="fi" id="client-last-touch" type="date" /></div>
-      <div class="fgp"><label class="fl">Next follow-up date</label><input class="fi" id="client-next-follow-up" type="date" /></div>
-      <div class="fgp"><label class="fl">Mailing country</label><input class="fi" id="client-mailing-country" placeholder="e.g. United States" /></div>
-      <div class="fgp"><label class="fl">Mailing state/province</label><input class="fi" id="client-mailing-state" /></div>
-      <div class="fgp"><label class="fl">Mailing city</label><input class="fi" id="client-mailing-city" /></div>
-      <div class="fgp"><label class="fl">Mailing zip/postal code</label><input class="fi" id="client-mailing-zip" /></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Mailing street</label><textarea class="fi" id="client-mailing-street" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Description</label><textarea class="fi" id="client-description" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="client-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Relationship notes</label><textarea class="fi" id="client-relationship-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-      <div class="fgp" style="grid-column:1/-1;padding-top:12px;border-top:1px solid var(--border);">
-        <div class="fl" style="margin-bottom:4px;">Customers tab (optional)</div>
-        <p style="font-size:12px;color:var(--text3);margin:0 0 12px;line-height:1.45;">Leave blank to use income and expenses linked to this client. Enter amounts to show fixed revenue and/or allocated cost in the Customers table; profit and margin update automatically.</p>
-        <div class="fg" style="grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="fgp"><label class="fl">Custom revenue</label><input class="fi" id="client-cust-revenue" type="number" min="0" step="0.01" placeholder="Auto from income" /></div>
-          <div class="fgp"><label class="fl">Custom allocated cost</label><input class="fi" id="client-cust-cost" type="number" min="0" step="0.01" placeholder="Auto from expenses" /></div>
+    <div class="card" id="mgr-org-detail-card" style="display:none;">
+      <div class="sh" style="margin-bottom:10px;">
+        <div class="st" id="mgr-org-detail-title">Organization</div>
+        <div class="hr">
+          <button type="button" class="btn" id="btn-mgr-org-detail-close">Close</button>
         </div>
       </div>
-    </div>
-    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
-      <button type="button" class="btn" id="btn-client-cancel">Cancel</button>
-      <button type="button" class="btn btn-p" id="btn-client-save">Save</button>
+      <div id="mgr-org-detail-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-bottom:10px;"></div>
+      <div style="overflow:auto;">
+        <table class="dt">
+          <thead>
+            <tr><th>Email</th><th>Role</th><th>Joined</th></tr>
+          </thead>
+          <tbody id="mgr-org-members-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Project CRUD -->
-<div class="mo" id="projectModal">
-  <div class="md" style="max-width:640px;">
-    <div class="mt" id="project-modal-title">Add campaign</div>
-    <input type="hidden" id="project-edit-id" value="" />
-    <div class="fg" style="margin-bottom:16px;">
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Project name *</label><input class="fi" id="project-name" /></div>
-      <div class="fgp"><label class="fl">Client</label><select class="fi" id="project-client"><option value="">— None —</option></select></div>
-      <div class="fgp"><label class="fl">Status</label><select class="fi" id="project-status"></select></div>
-      <div class="fgp"><label class="fl">Channel</label><input class="fi" id="project-channel" placeholder="e.g. Paid search, Email, Events" /></div>
-      <div class="fgp"><label class="fl">Legacy type (optional)</label><input class="fi" id="project-category" placeholder="Maps to type for shared DB" /></div>
-      <div class="fgp"><label class="fl">Start date</label><input class="fi" id="project-start" type="date" /></div>
-      <div class="fgp"><label class="fl">Due date</label><input class="fi" id="project-due" type="date" /></div>
-      <div class="fgp"><label class="fl">Budget ($)</label><input class="fi" id="project-budget" type="number" min="0" step="0.01" placeholder="0" /></div>
-      <div class="fgp"><label class="fl">Leads generated</label><input class="fi" id="project-leads-generated" type="number" min="0" step="1" placeholder="0" /></div>
-      <div class="fgp"><label class="fl">Value / pipeline ($)</label><input class="fi" id="project-value" type="number" min="0" step="0.01" /></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Description</label><textarea class="fi" id="project-desc" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-      <div class="fgp"><label class="fl">Client satisfaction (1–10)</label><input class="fi" id="project-satisfaction" type="number" min="1" max="10" step="1" placeholder="e.g. 8" /></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="project-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-      <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="project-archived" /><label class="fl" for="project-archived" style="margin:0;">Archived / closed</label>
-      </div>
-      <details id="project-case-study-details" style="grid-column:1/-1;margin-top:4px;border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;background:var(--bg3);">
-        <summary style="font-weight:600;cursor:pointer;user-select:none;outline:none;">Case study <span style="font-weight:400;color:var(--text3);font-size:12px;">(optional — website / portfolio)</span></summary>
-        <div id="project-case-study-body" class="rollout-panel on" style="margin-top:14px;display:flex;flex-direction:column;gap:12px;">
-          <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="project-case-study-published" />
-            <label class="fl" for="project-case-study-published" style="margin:0;">Show on website / in list when published</label>
-          </div>
-          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Case study category <span style="font-weight:400;color:var(--text3);font-size:12px;">(optional — separate from project type)</span></label><input class="fi" id="project-case-study-category" placeholder="e.g. Demand gen, Rebrand" /></div>
-          <div class="fgp" style="grid-column:1/-1;"><label class="fl">The challenge</label><textarea class="fi" id="project-case-study-challenge" rows="3" style="min-height:72px;resize:vertical;" placeholder="What problem did the client face?"></textarea></div>
-          <div class="fgp" style="grid-column:1/-1;">
-            <label class="fl">Our strategy</label>
-            <div style="font-size:12px;color:var(--text3);margin:0 0 8px;">Add titled points, or use a single narrative below if you leave the list empty.</div>
-            <div id="case-study-strategy-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-            <button type="button" class="btn" id="btn-case-study-strategy-add" style="margin-top:8px;font-size:12px;padding:4px 10px;">+ Add strategy point</button>
-            <label class="fl" style="margin-top:12px;">Single strategy narrative</label>
-            <textarea class="fi" id="project-case-study-strategy-plain" rows="2" style="min-height:56px;resize:vertical;" placeholder="Used when no points are filled above"></textarea>
-          </div>
-          <div class="fgp" style="grid-column:1/-1;"><label class="fl">The results <span style="font-weight:400;color:var(--text3);font-size:12px;">(one per line)</span></label><textarea class="fi" id="project-case-study-results" rows="3" style="min-height:72px;resize:vertical;" placeholder="+40% qualified leads&#10;2.1× ROAS"></textarea></div>
+  <div class="mo" id="leadClientModal">
+    <div class="md" style="max-width:480px;">
+      <div class="mt" id="lead-modal-title">Add lead / client</div>
+      <input type="hidden" id="lead-edit-id" value="" />
+      <div class="fg" style="margin-bottom:16px;">
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Name *</label><input class="fi" id="lead-field-name" placeholder="Company or person" /></div>
+        <div class="fgp"><label class="fl">Status</label>
+          <select class="fi" id="lead-field-status"><option value="lead">Lead</option><option value="closed">Closed sale</option></select>
         </div>
-      </details>
-    </div>
-    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
-      <button type="button" class="btn" id="btn-project-cancel">Cancel</button>
-      <button type="button" class="btn btn-p" id="btn-project-save">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- Case study read-only (from Projects table View) -->
-<div class="mo" id="caseStudyViewModal">
-  <div class="md" style="max-width:640px;max-height:90vh;display:flex;flex-direction:column;">
-    <div class="mt">Case study</div>
-    <div id="case-study-view-body" class="case-study-view-body" style="overflow:auto;flex:1;font-size:14px;line-height:1.5;color:var(--text);padding:4px 0 8px;"></div>
-    <div class="mf" style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px;">
-      <button type="button" class="btn btn-p" id="btn-case-study-view-close">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- Expense CRUD -->
-<div class="mo" id="expenseModal">
-  <div class="md" style="max-width:540px;">
-    <div class="mt" id="expense-modal-title">Add expense</div>
-    <input type="hidden" id="expense-edit-id" value="" />
-    <div class="fg" style="margin-bottom:16px;">
-      <div class="fgp"><label class="fl">Title</label><input class="fi" id="expense-title" /></div>
-      <div class="fgp"><label class="fl">Category</label><input class="fi" id="expense-category" placeholder="e.g. Software, Travel" /></div>
-      <div class="fgp"><label class="fl">Amount *</label><input class="fi" id="expense-amount" type="number" min="0" step="0.01" /></div>
-      <div class="fgp"><label class="fl">Date</label><input class="fi" id="expense-date" type="date" /></div>
-      <div class="fgp"><label class="fl">Vendor / payee</label><input class="fi" id="expense-vendor" /></div>
-      <div class="fgp"><label class="fl">Client</label><select class="fi" id="expense-client"><option value="">— None (unallocated) —</option></select></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="expense-notes" rows="2"></textarea></div>
-      <div class="fgp" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="expense-recurring" /><label class="fl" for="expense-recurring" style="margin:0;">Recurring</label>
+        <div class="fgp" id="lead-payment-wrap" style="display:none;"><label class="fl">Payment amount</label><input class="fi" id="lead-field-payment" type="number" min="0" step="1" placeholder="0" /></div>
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Search keyword</label><input class="fi" id="lead-field-keyword" placeholder="Optional" /></div>
+        <div class="fgp" style="grid-column:1/-1;">
+          <label class="fl">GA4 Client ID <span style="font-weight:400;color:var(--text3);">(ga_client_id)</span></label>
+          <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;">
+            <input class="fi" id="lead-field-clientid" placeholder="Join key to GA4 sessions" autocomplete="off" style="flex:1;min-width:160px;" />
+            <button type="button" class="btn" id="btn-lead-change-clientid" style="flex-shrink:0;display:none;">Change…</button>
+          </div>
+        </div>
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Campaign</label><select class="fi" id="lead-field-campaign"><option value="">— Unassigned —</option></select></div>
+        <div class="fgp"><label class="fl">Date added</label><input class="fi" id="lead-field-date" type="date" /></div>
       </div>
-      <div id="expense-recurrence-panel" class="rollout-panel" style="display:none;grid-column:1/-1;padding:14px 16px;border-radius:var(--rl);border:1px solid var(--border);background:var(--bg3);margin-top:2px;">
-        <div style="font-weight:600;margin-bottom:12px;font-size:14px;">Recurrence</div>
+      <div id="lead-source-footer" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
+        <div id="lead-source-attribution-body" class="ss" style="font-size:13px;line-height:1.55;color:var(--text2);"></div>
+      </div>
+      <div class="mf" style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;">
+        <button type="button" class="btn" id="btn-lead-delete" style="color:var(--red);margin-right:auto;display:none;">Delete record</button>
+        <button type="button" class="btn" id="btn-lead-cancel">Cancel</button>
+        <button type="button" class="btn btn-p" id="btn-lead-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mo" id="leadGaClientIdModal">
+    <div class="md" style="max-width:340px;">
+      <div class="mt" id="lead-gaid-title">GA4 Client ID</div>
+      <div id="lead-gaid-step-content" style="font-size:13px;line-height:1.5;color:var(--text2);margin-bottom:14px;"></div>
+      <div id="lead-gaid-input-wrap" style="display:none;margin-bottom:14px;">
+        <label class="fl" for="lead-gaid-input">Client ID</label>
+        <input class="fi" id="lead-gaid-input" placeholder="e.g. 1234567890.1234567890" autocomplete="off" />
+      </div>
+      <div class="mf" style="border-top:none;padding-top:0;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn" id="lead-gaid-btn-back" style="display:none;margin-right:auto;">Back</button>
+        <button type="button" class="btn" id="lead-gaid-btn-cancel">Cancel</button>
+        <button type="button" class="btn btn-p" id="lead-gaid-btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mo" id="campaignMvpModal">
+    <div class="md" style="max-width:440px;">
+      <div class="mt" id="campaign-mvp-title">Add campaign</div>
+      <input type="hidden" id="campaign-mvp-edit-id" value="" />
+      <div class="fg" style="margin-bottom:16px;">
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Campaign name *</label><input class="fi" id="campaign-mvp-name" /></div>
+        <div class="fgp"><label class="fl">Channel</label><select class="fi" id="campaign-mvp-channel"></select></div>
+        <div class="fgp"><label class="fl">Total spend</label><input class="fi" id="campaign-mvp-spend" type="number" min="0" step="100" /></div>
+      </div>
+      <div class="mf" style="border-top:none;padding-top:0;">
+        <button type="button" class="btn" id="btn-campaign-mvp-cancel">Cancel</button>
+        <button type="button" class="btn btn-p" id="btn-campaign-mvp-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mo" id="connectionsCsvModal">
+    <div class="md" style="max-width:760px;max-height:92vh;display:flex;flex-direction:column;">
+      <div class="mt">Import CSV</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.45;margin-bottom:12px;">Choose a file or paste CSV text, map columns, preview, then confirm.</p>
+      <div id="csv-import-step1" style="flex:1;min-height:0;">
+        <label class="fl">CSV file</label>
+        <input type="file" class="fi" id="csv-import-file" accept=".csv,text/csv" />
+        <label class="fl" style="margin-top:14px;">Or paste CSV</label>
+        <textarea class="fi" id="csv-import-paste" rows="6" placeholder="name,status,payment,..." style="resize:vertical;min-height:120px;font-family:var(--font-mono);font-size:12px;"></textarea>
+      </div>
+      <div id="csv-import-step2" style="display:none;flex:1;min-height:0;overflow:auto;">
         <div class="fg" style="margin-bottom:0;">
-          <div class="fgp">
-            <label class="fl">Repeat</label>
-            <select class="fi" id="expense-recurrence-repeat">
-              <option value="monthly">Monthly</option>
-              <option value="weekly">Weekly</option>
-            </select>
-          </div>
-          <div class="fgp">
-            <label class="fl">Every</label>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <input class="fi" type="number" id="expense-recurrence-interval" min="1" value="1" style="width:72px;" />
-              <span id="expense-recurrence-interval-label" style="font-size:13px;color:var(--text2);">month(s)</span>
-            </div>
-          </div>
-          <div class="fgp" id="expense-recurrence-monthly-row" style="grid-column:1/-1;">
-            <label class="fl">On day of month</label>
-            <input class="fi" type="number" id="expense-recurrence-dom" min="1" max="31" value="1" style="max-width:100px;" />
-          </div>
-          <div class="fgp" id="expense-recurrence-weekly-row" style="grid-column:1/-1;display:none;">
-            <label class="fl" style="width:100%;">On</label>
-            <div id="expense-recurrence-dow-wrap" style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button type="button" class="btn exp-rec-dow" data-dow="0" aria-pressed="false">S</button>
-              <button type="button" class="btn exp-rec-dow" data-dow="1" aria-pressed="false">M</button>
-              <button type="button" class="btn exp-rec-dow" data-dow="2" aria-pressed="false">T</button>
-              <button type="button" class="btn exp-rec-dow" data-dow="3" aria-pressed="false">W</button>
-              <button type="button" class="btn exp-rec-dow" data-dow="4" aria-pressed="false">T</button>
-              <button type="button" class="btn exp-rec-dow" data-dow="5" aria-pressed="false">F</button>
-              <button type="button" class="btn exp-rec-dow" data-dow="6" aria-pressed="false">S</button>
-            </div>
-          </div>
-          <div class="fgp" style="grid-column:1/-1;">
-            <label class="fl">End</label>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <select class="fi" id="expense-recurrence-end-mode" style="width:auto;min-width:150px;">
-                <option value="never">Never</option>
-                <option value="on">On date</option>
-              </select>
-              <input class="fi" type="date" id="expense-recurrence-end-date" style="max-width:170px;" />
-            </div>
-          </div>
+          <div class="fgp"><label class="fl">Name *</label><select class="fi" id="map-name"></select></div>
+          <div class="fgp"><label class="fl">Status</label><select class="fi" id="map-status"></select></div>
+          <div class="fgp"><label class="fl">Payment</label><select class="fi" id="map-payment"></select></div>
+          <div class="fgp"><label class="fl">Keyword</label><select class="fi" id="map-keyword"></select></div>
+          <div class="fgp"><label class="fl">Campaign</label><select class="fi" id="map-campaign"></select></div>
+          <div class="fgp"><label class="fl">Date added</label><select class="fi" id="map-dateAdded"></select></div>
         </div>
-        <p id="expense-recurrence-summary" style="font-size:13px;color:var(--text2);margin:12px 0 0;line-height:1.5;"></p>
+      </div>
+      <div id="csv-import-step3" style="display:none;flex:1;min-height:0;flex-direction:column;">
+        <div class="st" style="font-size:13px;margin-bottom:8px;">Preview (first rows)</div>
+        <div style="overflow:auto;max-height:280px;border:1px solid var(--border);border-radius:var(--rl);">
+          <table class="dt" style="margin:0;">
+            <thead><tr><th>Name</th><th>Status</th><th>Payment</th><th>Keyword</th><th>Campaign</th><th>Date</th></tr></thead>
+            <tbody id="csv-import-preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="mf" style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;flex-shrink:0;">
+        <button type="button" class="btn" id="csv-import-cancel">Cancel</button>
+        <button type="button" class="btn" id="csv-import-back" style="display:none;">Back</button>
+        <button type="button" class="btn btn-p" id="csv-import-next">Next</button>
+        <button type="button" class="btn btn-p" id="csv-import-commit" style="display:none;">Confirm import</button>
       </div>
     </div>
-    <div class="mf" style="border-top:none;padding-top:0;">
-      <button type="button" class="btn" id="btn-expense-cancel">Cancel</button>
-      <button type="button" class="btn btn-p" id="btn-expense-save">Save</button>
+  </div>
+
+  <div class="mo stub-pop" id="stubFeatureModal">
+    <div class="md" onclick="event.stopPropagation()">
+      <div class="mt" id="stubFeatureTitle">Coming soon</div>
+      <p class="stub-body" id="stubFeatureBody" style="font-size:14px;color:var(--text2);line-height:1.5;">This integration is not available yet.</p>
+      <div class="mf" style="border-top:none;padding-top:0;">
+        <button type="button" class="btn btn-p" id="stubFeatureOk">OK</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Marketing campaign -->
-<div class="mo" id="campaignModal">
-  <div class="md" style="max-width:480px;">
-    <div class="mt" id="campaign-modal-title">New campaign</div>
-    <input type="hidden" id="campaign-edit-id" value="" />
-    <div class="fg" style="margin-bottom:16px;">
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Campaign name *</label><input class="fi" id="campaign-name" placeholder="e.g. Q2 lead gen" /></div>
-      <div class="fgp"><label class="fl">Channel</label><input class="fi" id="campaign-channel" placeholder="e.g. Paid search, Email" /></div>
-      <div class="fgp"><label class="fl">Start date</label><input class="fi" id="campaign-start" type="date" /></div>
-      <div class="fgp"><label class="fl">Pipeline value</label><input class="fi" id="campaign-pipeline-value" type="number" min="0" step="1" placeholder="0" /></div>
-      <div class="fgp"><label class="fl">Status</label><select class="fi" id="campaign-status">
-        <option value="pipeline">Pipeline</option>
-        <option value="won">Won</option>
-        <option value="lost">Lost</option>
-      </select></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="campaign-notes" rows="2" style="min-height:56px;resize:vertical;"></textarea></div>
-    </div>
-    <div class="mf" style="border-top:none;padding-top:0;margin-top:0;">
-      <button type="button" class="btn" id="btn-campaign-cancel">Cancel</button>
-      <button type="button" class="btn btn-p" id="btn-campaign-save">Save campaign</button>
+  <div class="mo dev-admin-pop" id="devAdminModal">
+    <div class="md" onclick="event.stopPropagation()" style="max-width:640px;">
+      <div class="mt">Create organization</div>
+      <p class="ss" style="margin: -10px 0 16px; font-size: 13px; line-height: 1.55;">
+        Developer-only. Create a workspace and set its initial admin email.
+      </p>
+
+      <div class="card" style="padding:16px 16px 14px; margin-bottom:14px;">
+        <div class="st" style="font-size:13px;margin-bottom:10px;">Organization details</div>
+        <div class="fg" style="grid-template-columns: 1fr 1fr; margin-bottom: 0;">
+          <div class="fgp" style="grid-column:1/-1;"><label class="fl">Organization name</label><input class="fi" id="dev-org-name" placeholder="Acme Co" /></div>
+          <div class="fgp"><label class="fl">Slug</label><input class="fi" id="dev-org-slug" placeholder="acme-co" /></div>
+          <div class="fgp"><label class="fl">Admin email</label><input class="fi" id="dev-org-admin-email" placeholder="admin@acme.com" /></div>
+        </div>
+        <div id="dev-org-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:10px;"></div>
+        <div class="hr" style="margin-top:10px; justify-content:flex-end;">
+          <button type="button" class="btn btn-p" id="btn-dev-org-create">Create org</button>
+        </div>
+        <div id="dev-org-result" style="font-size:12px;color:var(--text2);margin-top:10px;display:none;"></div>
+      </div>
+
+      <div class="mf" style="margin-top:14px;">
+        <button type="button" class="btn" id="btn-dev-admin-close">Close</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Income CRUD -->
-<div class="mo" id="incomeModal">
-  <div class="md">
-    <div class="mt" id="income-modal-title">Add income</div>
-    <input type="hidden" id="income-edit-id" value="" />
-    <div class="fg" style="margin-bottom:16px;">
-      <div class="fgp"><label class="fl">Source / description</label><input class="fi" id="income-source" /></div>
-      <div class="fgp"><label class="fl">Amount *</label><input class="fi" id="income-amount" type="number" min="0" step="0.01" /></div>
-      <div class="fgp"><label class="fl">Date</label><input class="fi" id="income-date" type="date" /></div>
-      <div class="fgp"><label class="fl">Category</label><input class="fi" id="income-category" /></div>
-      <div class="fgp"><label class="fl">Client</label><select class="fi" id="income-client"><option value="">— None —</option></select></div>
-      <div class="fgp"><label class="fl">Project</label><select class="fi" id="income-project"><option value="">— None —</option></select></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Notes</label><textarea class="fi" id="income-notes" rows="2"></textarea></div>
-    </div>
-    <div class="mf" style="border-top:none;padding-top:0;">
-      <button type="button" class="btn" id="btn-income-cancel">Cancel</button>
-      <button type="button" class="btn btn-p" id="btn-income-save">Save</button>
+  <div class="mo dev-admin-pop" id="mgrInviteModal">
+    <div class="md" onclick="event.stopPropagation()" style="max-width:560px;">
+      <div class="mt">Invite user</div>
+      <p class="ss" style="margin: -10px 0 16px; font-size: 13px; line-height: 1.55;">
+        Generates a temporary password and adds the user to the organization immediately. On first login they must change their password.
+      </p>
+      <input type="hidden" id="mgr-invite-org-id" value="" />
+      <div class="fg" style="grid-template-columns: 1fr 1fr; margin-bottom: 0;">
+        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Organization</label><input class="fi" id="mgr-invite-org-label" disabled /></div>
+        <div class="fgp"><label class="fl">Role</label>
+          <select class="fi" id="mgr-invite-role">
+            <option value="admin">Admin</option>
+            <option value="member" selected>Team member</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </div>
+        <div class="fgp"><label class="fl">Email</label><input class="fi" id="mgr-invite-email" placeholder="user@acme.com" /></div>
+      </div>
+      <div id="mgr-invite-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:10px;"></div>
+      <div class="hr" style="margin-top:10px; justify-content:flex-end;">
+        <button type="button" class="btn btn-p" id="btn-mgr-invite-generate">Generate credentials</button>
+      </div>
+      <div id="mgr-invite-result" style="font-size:12px;color:var(--text2);margin-top:10px;display:none;"></div>
+      <div class="mf" style="margin-top:14px;">
+        <button type="button" class="btn" id="btn-mgr-invite-close">Close</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Project statuses -->
-<div class="mo" id="statusModal">
-  <div class="md" style="max-width:420px;">
-    <div class="mt">Project statuses</div>
-    <p style="font-size:12px;color:var(--text3);margin:-8px 0 12px;">Customize labels for the project status dropdown. Removing a status does not delete projects using it.</p>
-    <div id="status-list" style="max-height:240px;overflow-y:auto;margin-bottom:12px;"></div>
-    <div class="fg" style="grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px;">
-      <div class="fgp"><label class="fl">New status</label><input class="fi" id="status-new-label" placeholder="e.g. In review" /></div>
-      <button type="button" class="btn btn-p" id="btn-status-add" style="height:40px;">Add</button>
-    </div>
-    <div class="mf" style="border-top:none;padding-top:0;">
-      <button type="button" class="btn" id="btn-status-close">Close</button>
-    </div>
-  </div>
 </div>
-
 </div><!-- #app-shell -->
 
-<!-- Workspaces (outside #app-shell so switcher works before shell is visible) -->
+<div class="mobile-actions">
+  <button type="button" class="btn" onclick="document.getElementById('btn-add-lead')?.click()">+ Lead</button>
+  <button type="button" class="btn btn-p" onclick="document.getElementById('btn-add-campaign')?.click()">+ Campaign</button>
+</div>
+
+<div class="mo" id="onboardModal">
+  <div class="md" onclick="event.stopPropagation()" style="max-width:560px;">
+    <div class="mt">Set up your workspace</div>
+    <div class="fg" style="grid-template-columns:1fr 1fr;">
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Workspace name</label><input class="fi" id="ob-name" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Workspace URL slug</label><input class="fi" id="ob-slug" placeholder="my-company" /></div>
+      <div class="fgp"><label class="fl">Owner name</label><input class="fi" id="ob-owner" /></div>
+      <div class="fgp"><label class="fl">Role</label><input class="fi" id="ob-role" /></div>
+      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Tagline</label><input class="fi" id="ob-tagline" /></div>
+      <div class="fgp"><label class="fl">Accent color</label><input class="fi" id="ob-accent" type="color" value="#d4f542" style="height:42px;padding:4px;" /></div>
+    </div>
+    <div id="onboard-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:10px;"></div>
+    <div class="mf" style="margin-top:14px;">
+      <button type="button" class="btn btn-p" id="onboard-submit-btn">Save workspace</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="workspaceModal">
-  <div class="md" style="max-width:480px;">
-    <div class="mt" id="workspace-modal-heading">Workspaces</div>
-    <p class="ui-public-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:16px;">Your data lives in this cloud workspace. Each workspace has its own URL path, for example <code style="font-size:12px;color:var(--text);">yoursite.com/your-slug/</code>—bookmark it for quick access.</p>
-    <p class="ui-internal-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:16px;">Internal: org switcher uses <code style="font-size:12px;color:var(--text);">my_organizations</code> and navigates to <code style="font-size:12px;color:var(--text);">/{slug}/</code>.</p>
-    <div id="workspace-list"></div>
-    <div id="workspace-add-panel" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-      <div class="fst" style="margin-bottom:8px;">New workspace</div>
-      <p class="ui-public-facing" style="font-size:12px;color:var(--text3);line-height:1.45;margin:0 0 10px;">Creates another organization you own. Changing a workspace URL later will break old bookmarks.</p>
-      <div class="fg" style="margin-bottom:10px;">
-        <div class="fgp" style="grid-column:1/-1;"><label class="fl">Workspace name *</label><input class="fi" id="ws-new-name" placeholder="e.g. Side project" /></div>
-        <div class="fgp" style="grid-column:1/-1;"><label class="fl">URL slug *</label><input class="fi" id="ws-new-slug" placeholder="e.g. side-project" autocomplete="off" /></div>
+  <div class="md" onclick="event.stopPropagation()" style="max-width:620px;">
+    <div class="mt">Workspaces</div>
+    <div id="workspace-list" style="margin-bottom:12px;"></div>
+    <div class="hr" style="margin-bottom:10px;">
+      <button type="button" class="btn" id="btn-workspace-add-another">Add another workspace</button>
+    </div>
+    <div id="workspace-add-panel" style="display:none;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg3);margin-bottom:10px;">
+      <div class="fg" style="grid-template-columns:1fr 1fr;">
+        <div class="fgp"><label class="fl">Workspace name</label><input class="fi" id="ws-new-name" /></div>
+        <div class="fgp"><label class="fl">Workspace slug</label><input class="fi" id="ws-new-slug" placeholder="my-company" /></div>
       </div>
-      <div id="workspace-add-error" style="font-size:12px;color:var(--red);margin-bottom:8px;min-height:1em;"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">
-        <button type="button" class="btn btn-p" id="btn-workspace-create-submit">Create and open</button>
+      <div id="workspace-add-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:8px;"></div>
+      <div class="hr" style="margin-top:8px;">
+        <button type="button" class="btn btn-p" id="btn-workspace-create-submit">Create workspace</button>
         <button type="button" class="btn" id="btn-workspace-add-cancel">Cancel</button>
       </div>
     </div>
-    <div class="mf" style="border-top:none;padding-top:0;margin-top:8px;">
-      <button type="button" class="btn btn-p" id="btn-workspace-add-another">+ Add workspace</button>
+    <div class="mf" style="margin-top:10px;">
       <button type="button" class="btn" id="btn-workspace-modal-close">Close</button>
     </div>
   </div>
 </div>
 
-<!-- First-time workspace (outside #app-shell so it can show during onboarding) -->
-<div class="mo" id="onboardModal">
-  <div class="md" style="max-width:480px;">
-    <div class="mt" id="onboard-heading">Name your workspace</div>
-    <p class="ui-public-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">Choose how your organization appears and the URL you will use to open this dashboard. Data is stored in your Supabase workspace (not only in this browser).</p>
-    <p class="ui-public-facing" style="font-size:12px;color:var(--text3);line-height:1.45;margin-bottom:18px;">If you change the URL slug later, old links will stop working—pick something you can share with your team.</p>
-    <p class="ui-internal-facing" style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:18px;">Internal: first-run org profile; updates <code style="font-size:12px;">organizations</code> + dashboard settings.</p>
-    <div class="fg" style="margin-bottom:12px;">
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Company / workspace name *</label><input class="fi" id="ob-name" placeholder="e.g. Acme Agency" /></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">URL slug *</label><input class="fi" id="ob-slug" placeholder="e.g. acme-agency" autocomplete="off" /></div>
-      <div class="fgp" style="grid-column:1/-1;"><label class="fl">Tagline (optional)</label><textarea class="fi" id="ob-tagline" rows="2" placeholder="Shown under your business name on the dashboard" style="min-height:64px;resize:vertical;"></textarea></div>
-      <div class="fgp"><label class="fl">Your name</label><input class="fi" id="ob-owner" placeholder="Jane Doe" /></div>
-      <div class="fgp"><label class="fl">Your role</label><input class="fi" id="ob-role" value="" placeholder="e.g. Founder" /></div>
-      <div class="fgp"><label class="fl">Accent color</label><input class="fi" id="ob-accent" type="color" value="#d4f542" style="min-height:40px;padding:4px 8px;" /></div>
-    </div>
-    <div id="onboard-error" style="font-size:13px;color:var(--red);margin-bottom:12px;min-height:1.2em;"></div>
-    <div class="mf" style="border-top:none;padding-top:0;">
-      <button type="button" class="btn btn-p" id="onboard-submit-btn">Save and continue</button>
-    </div>
-  </div>
-</div>
-
-<div class="mobile-actions">
-  <button type="button" class="btn" onclick="document.getElementById('btn-add-client')?.click()">+ Lead</button>
-  <button type="button" class="btn btn-p" onclick="document.getElementById('btn-add-project')?.click()">+ Campaign</button>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/assets/financial-core.js?v=20260408-industry"></script>
-<script src="/assets/supabase-auth.js"></script>
-<script src="/assets/dashboard-assistant.js"></script>
+<script src="/assets/agency-mvp.js?v=20260430-demo-realflow"></script>
+<script src="/assets/supabase-auth.js?v=20260420-crmfix1"></script>
 </body>
 </html>

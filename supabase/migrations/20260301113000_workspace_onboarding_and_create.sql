@@ -6,12 +6,9 @@
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.organizations
   ADD COLUMN IF NOT EXISTS onboarding_completed boolean NOT NULL DEFAULT true;
-
-ALTER TABLE public.organizations
-  ADD COLUMN IF NOT EXISTS admin_email text;
-
 COMMENT ON COLUMN public.organizations.onboarding_completed IS 'False until first-time workspace setup is finished in the dashboard.';
-
+ALTER TABLE public.organizations
+  ADD COLUMN IF NOT EXISTS onboarding jsonb NOT NULL DEFAULT '{}'::jsonb;
 -- -----------------------------------------------------------------------------
 -- 2. New users: default org starts with onboarding_completed = false
 -- -----------------------------------------------------------------------------
@@ -24,31 +21,22 @@ AS $$
 DECLARE
   new_org uuid := gen_random_uuid();
   s text;
-  admin_email text;
 BEGIN
   IF EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = NEW.id) THEN
     RETURN NEW;
   END IF;
   s := 'org-' || substr(replace(NEW.id::text, '-', ''), 1, 12);
   s := lower(s);
-  admin_email := CASE
-    WHEN NEW.email IS NULL THEN NULL
-    ELSE lower(trim(NEW.email))
-  END;
   WHILE EXISTS (SELECT 1 FROM public.organizations o WHERE o.slug = s) LOOP
     s := 'org-' || substr(md5(random()::text || NEW.id::text), 1, 12);
   END LOOP;
-  INSERT INTO public.organizations (id, slug, name, admin_email, created_at, updated_at, onboarding_completed)
-  VALUES (new_org, s, split_part(COALESCE(NEW.email, 'user'), '@', 1), admin_email, now(), now(), false);
+  INSERT INTO public.organizations (id, slug, name, created_at, updated_at, onboarding_completed)
+  VALUES (new_org, s, split_part(COALESCE(NEW.email, 'user'), '@', 1), now(), now(), false);
   INSERT INTO public.organization_members (organization_id, user_id, role, created_at)
   VALUES (new_org, NEW.id, 'owner', now());
   RETURN NEW;
 END;
 $$;
-
--- NOTE: org creation is intentionally NOT triggered on auth.users insert.
--- New users must be attached to an existing org via invite/provisioning flows.
-
 -- -----------------------------------------------------------------------------
 -- 3. Slug validation (matches organizations_slug_lower)
 -- -----------------------------------------------------------------------------
@@ -60,12 +48,10 @@ AS $$
   SELECT lower(trim(p_slug)) = p_slug
     AND p_slug ~ '^[a-z0-9][a-z0-9-]{1,62}$';
 $$;
-
 REVOKE ALL ON FUNCTION public.workspace_slug_is_valid(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.workspace_slug_is_valid(text) TO authenticated, service_role;
-
 -- -----------------------------------------------------------------------------
--- 4. Update org name + slug + mark onboarding done (owner/admin only)
+-- 4. Update org name + slug only (owner/admin). Onboarding completion: see onboarding_wizard.sql
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.update_workspace_profile(p_org_id uuid, p_name text, p_slug text)
 RETURNS json
@@ -98,7 +84,7 @@ BEGIN
   END IF;
   BEGIN
     UPDATE public.organizations
-    SET name = nm, slug = sl, updated_at = now(), onboarding_completed = true
+    SET name = nm, slug = sl, updated_at = now()
     WHERE id = p_org_id;
   EXCEPTION
     WHEN unique_violation THEN
@@ -107,10 +93,8 @@ BEGIN
   RETURN json_build_object('ok', true, 'slug', sl);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.update_workspace_profile(uuid, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.update_workspace_profile(uuid, text, text) TO authenticated, service_role;
-
 -- -----------------------------------------------------------------------------
 -- 5. Create another workspace (owner of new org)
 -- -----------------------------------------------------------------------------
@@ -125,7 +109,6 @@ DECLARE
   nm text := trim(both from coalesce(p_name, ''));
   sl text := lower(trim(both from coalesce(p_slug, '')));
   new_org uuid := gen_random_uuid();
-  admin_email text;
 BEGIN
   IF uid IS NULL THEN
     RETURN json_build_object('ok', false, 'error', 'Not authenticated');
@@ -140,12 +123,8 @@ BEGIN
     RETURN json_build_object('ok', false, 'error', 'That URL slug is already taken');
   END IF;
   BEGIN
-    SELECT lower(trim(u.email)) INTO admin_email
-    FROM auth.users u
-    WHERE u.id = uid;
-
-    INSERT INTO public.organizations (id, slug, name, admin_email, created_at, updated_at, onboarding_completed)
-    VALUES (new_org, sl, nm, admin_email, now(), now(), true);
+    INSERT INTO public.organizations (id, slug, name, created_at, updated_at, onboarding_completed)
+    VALUES (new_org, sl, nm, now(), now(), true);
   EXCEPTION
     WHEN unique_violation THEN
       RETURN json_build_object('ok', false, 'error', 'That URL slug is already taken');
@@ -155,6 +134,71 @@ BEGIN
   RETURN json_build_object('ok', true, 'id', new_org, 'slug', sl);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.create_workspace_for_user(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.create_workspace_for_user(text, text) TO authenticated, service_role;
+-- -----------------------------------------------------------------------------
+-- 6. Onboarding wizard progress + completion (see also supabase/onboarding_wizard.sql)
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.save_onboarding_progress(p_org_id uuid, p_patch jsonb)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  merged jsonb;
+BEGIN
+  IF uid IS NULL THEN
+    RETURN json_build_object('ok', false, 'error', 'Not authenticated');
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.organization_members m
+    WHERE m.organization_id = p_org_id AND m.user_id = uid AND m.role IN ('owner', 'admin')
+  ) THEN
+    RETURN json_build_object('ok', false, 'error', 'Not allowed to update this workspace');
+  END IF;
+  IF p_patch IS NULL OR jsonb_typeof(p_patch) <> 'object' THEN
+    RETURN json_build_object('ok', false, 'error', 'Invalid patch');
+  END IF;
+  merged := coalesce((SELECT onboarding FROM public.organizations WHERE id = p_org_id), '{}'::jsonb) || p_patch;
+  UPDATE public.organizations
+  SET onboarding = merged, updated_at = now()
+  WHERE id = p_org_id;
+  RETURN json_build_object('ok', true, 'onboarding', merged);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.save_onboarding_progress(uuid, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.save_onboarding_progress(uuid, jsonb) TO authenticated, service_role;
+CREATE OR REPLACE FUNCTION public.complete_workspace_onboarding(p_org_id uuid, p_final jsonb)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+  merged jsonb;
+BEGIN
+  IF uid IS NULL THEN
+    RETURN json_build_object('ok', false, 'error', 'Not authenticated');
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.organization_members m
+    WHERE m.organization_id = p_org_id AND m.user_id = uid AND m.role IN ('owner', 'admin')
+  ) THEN
+    RETURN json_build_object('ok', false, 'error', 'Not allowed to update this workspace');
+  END IF;
+  merged := coalesce((SELECT onboarding FROM public.organizations WHERE id = p_org_id), '{}'::jsonb);
+  IF p_final IS NOT NULL AND jsonb_typeof(p_final) = 'object' THEN
+    merged := merged || p_final;
+  END IF;
+  merged := merged || jsonb_build_object('completedAt', to_jsonb(now()));
+  UPDATE public.organizations
+  SET onboarding = merged, onboarding_completed = true, updated_at = now()
+  WHERE id = p_org_id;
+  RETURN json_build_object('ok', true);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.complete_workspace_onboarding(uuid, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.complete_workspace_onboarding(uuid, jsonb) TO authenticated, service_role;

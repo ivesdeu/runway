@@ -34,11 +34,24 @@
     return;
   }
 
-  var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: true,
+    },
+  });
   window.supabaseClient = supabase;
   /** Used by team Edge `fetch` (CDN bundles may not expose `supabaseUrl` / `supabaseKey`). */
   window.__bizdashSupabaseUrl = SUPABASE_URL;
   window.__bizdashSupabaseAnonKey = SUPABASE_ANON_KEY;
+  try {
+    var tokenMeta = document.querySelector('meta[name="demo-mvp-write-token"]');
+    var token = tokenMeta && tokenMeta.getAttribute('content');
+    window.__bizdashDemoMvpWriteToken = token ? String(token).trim() : '';
+  } catch (_) {
+    window.__bizdashDemoMvpWriteToken = '';
+  }
 
   function $(id) {
     return document.getElementById(id);
@@ -48,8 +61,8 @@
    * Ceilings for org / onboarding resolution (not session read — that is driven by INITIAL_SESSION).
    * These are UX timeouts only; the auth session itself has no artificial cap.
    */
-  var ORG_RESOLVE_MS = 8000;
-  var ONBOARDING_GATE_MS = 5000;
+  var ORG_RESOLVE_MS = 15000;
+  var ONBOARDING_GATE_MS = 8000;
 
   function withTimeout(promise, ms, errMsg) {
     return Promise.race([
@@ -366,8 +379,35 @@
       return { ok: false };
     }
     if (!listRes.data || !listRes.data.length) {
-      gateErr('No workspace found for your account. Contact support.');
+      // Developer accounts can access internal Manager tools without workspace membership.
+      try {
+        var e = user && user.email ? String(user.email).trim().toLowerCase() : '';
+        if (e === 'contact@ivesdeu.com') {
+          try {
+            document.body.classList.add('internal-mode');
+          } catch (_) {}
+          clearOrgContext();
+          return { ok: true, needsOnboarding: false };
+        }
+        var dev = await retryOnAuthLock(function () {
+          return supabase.rpc('is_developer');
+        });
+        if (!dev.error && dev.data === true) {
+          try {
+            document.body.classList.add('internal-mode');
+          } catch (_) {}
+          clearOrgContext();
+          return { ok: true, needsOnboarding: false };
+        }
+      } catch (_) {}
+
+      gateErr('Your account is not yet assigned to a workspace.');
       clearOrgContext();
+      try {
+        await retryOnAuthLock(function () {
+          return supabase.auth.signOut();
+        });
+      } catch (_) {}
       return { ok: false };
     }
     var first = listRes.data[0];
@@ -451,6 +491,7 @@
       needs = await fetchOrgNeedsOnboarding(window.currentOrganizationId);
     }
     if (!needs) {
+      await maybeForcePasswordChange(user);
       showApp(user);
       return;
     }
@@ -462,6 +503,33 @@
     var err = $('onboard-error');
     if (err) err.textContent = '';
     showOnboardModal();
+  }
+
+  async function maybeForcePasswordChange(user) {
+    try {
+      if (!user || !user.id) return;
+      var r = await retryOnAuthLock(function () {
+        return supabase.from('user_security').select('must_change_password').eq('user_id', user.id).maybeSingle();
+      });
+      if (r.error || !r.data) return;
+      if (r.data.must_change_password !== true) return;
+      showLogin();
+      setAuthRecoveryMode(true);
+      var ge = $('gate-auth-error');
+      if (ge) ge.textContent = 'Set a new password to finish signing in.';
+      // After password update, clear the flag.
+      var btnSignin = $('gate-signin');
+      if (btnSignin && btnSignin.getAttribute('data-must-change-wired') !== '1') {
+        btnSignin.setAttribute('data-must-change-wired', '1');
+        btnSignin.addEventListener('click', function () {
+          Promise.resolve()
+            .then(function () {
+              return supabase.rpc('clear_must_change_password');
+            })
+            .catch(function () {});
+        });
+      }
+    } catch (_) {}
   }
 
   function wireOnboardSubmit(user) {
@@ -724,7 +792,7 @@
     var heading = document.querySelector('#auth-login-shell .pt');
     var subtitle = document.querySelector('#auth-login-shell p');
     var signin = $('gate-signin');
-    var signup = $('gate-signup');
+    var google = $('gate-google');
     var github = $('gate-github');
     var forgot = $('gate-forgot-password');
     var confirmWrap = $('gate-confirm-wrap');
@@ -736,7 +804,7 @@
         : 'Sign in to use the dashboard.';
     }
     if (signin) signin.textContent = authRecoveryMode ? 'Update password' : 'Sign in';
-    if (signup) signup.style.display = authRecoveryMode ? 'none' : '';
+    if (google) google.style.display = authRecoveryMode ? 'none' : '';
     if (github) github.style.display = authRecoveryMode ? 'none' : '';
     if (forgot) forgot.style.display = authRecoveryMode ? 'none' : '';
     if (confirmWrap) confirmWrap.style.display = authRecoveryMode ? '' : 'none';
@@ -866,6 +934,9 @@
     } else {
       console.error('financial-core: loadScreenshotMockData not available (script order?)');
     }
+    if (typeof window.refreshAgencyMvpForAuthContext === 'function') {
+      window.refreshAgencyMvpForAuthContext();
+    }
   }
 
   function showApp(user) {
@@ -892,11 +963,43 @@
       }
     }
 
+    // Enable internal-only UI for allowlisted developer accounts.
+    try {
+      var email = user && user.email ? String(user.email).trim().toLowerCase() : '';
+      if (email === 'contact@ivesdeu.com') {
+        document.body.classList.add('internal-mode');
+      } else {
+        supabase
+          .rpc('is_developer')
+          .then(function (r) {
+            if (r && r.data === true) document.body.classList.add('internal-mode');
+            else document.body.classList.remove('internal-mode');
+          })
+          .catch(function () {
+            document.body.classList.remove('internal-mode');
+          });
+      }
+    } catch (_) {
+      var email2 = user && user.email ? String(user.email).trim().toLowerCase() : '';
+      if (email2 === 'contact@ivesdeu.com') document.body.classList.add('internal-mode');
+      else document.body.classList.remove('internal-mode');
+    }
+
     drainInviteFlashIntoApp();
 
     if (window.initDataFromSupabase) {
       window.initDataFromSupabase();
     }
+    if (typeof window.refreshAgencyMvpForAuthContext === 'function') {
+      window.refreshAgencyMvpForAuthContext();
+    }
+
+    // If no org context (developer mode), land on Manager accounts by default.
+    try {
+      if (!window.currentOrganizationId && document.body.classList.contains('internal-mode') && typeof window.nav === 'function') {
+        window.nav('manager', null);
+      }
+    } catch (_) {}
   }
 
   /**
@@ -991,7 +1094,7 @@
     }
 
     var btnSignin = $('gate-signin');
-    var btnSignup = $('gate-signup');
+    var btnGoogle = $('gate-google');
     var btnGithub = $('gate-github');
     var btnForgot = $('gate-forgot-password');
 
@@ -1058,45 +1161,6 @@
       });
     }
 
-    if (btnSignup) {
-      btnSignup.addEventListener('click', async function () {
-        if (!signupMode) {
-          setSignupMode(true);
-          setError('Confirm your password to create an account.');
-          if (confirmInput) confirmInput.focus();
-          return;
-        }
-        var email = emailInput && emailInput.value.trim();
-        var password = passwordInput && passwordInput.value;
-        var confirmPassword = confirmInput && confirmInput.value;
-        if (!email || !password) {
-          setError('Email and password are required.');
-          return;
-        }
-        if (!confirmPassword) {
-          setError('Please confirm your password.');
-          return;
-        }
-        if (password !== confirmPassword) {
-          setError('Passwords do not match.');
-          return;
-        }
-        setError('');
-        try {
-          var res = await supabase.auth.signUp({ email: email, password: password });
-          if (res.error) {
-            setError(res.error.message || 'Could not sign up.');
-            return;
-          }
-          setError('Check your email to confirm your account, then sign in.');
-          setSignupMode(false);
-        } catch (err) {
-          console.error('signUp error', err);
-          setError('Unexpected error signing up.');
-        }
-      });
-    }
-
     if (btnForgot) {
       btnForgot.addEventListener('click', async function () {
         setSignupMode(false);
@@ -1125,6 +1189,28 @@
     if (btnViewDemo) {
       btnViewDemo.addEventListener('click', function () {
         showDemoDashboard();
+      });
+    }
+
+    if (btnGoogle) {
+      btnGoogle.addEventListener('click', async function () {
+        try {
+          var path = window.location.pathname || '/';
+          var search = window.location.search || '';
+          var redirectTo = window.location.origin + path + search;
+          var res = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: redirectTo,
+            },
+          });
+          if (res.error) {
+            setError(res.error.message || 'Google sign-in failed.');
+          }
+        } catch (err) {
+          console.error('Google auth error', err);
+          setError('Unexpected error starting Google sign-in.');
+        }
       });
     }
 
