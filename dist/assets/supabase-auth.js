@@ -113,6 +113,7 @@
     window.currentOrganizationId = null;
     window.currentOrganizationSlug = null;
     window.currentOrganizationRole = null;
+    updateOrgSwitcherLabel();
   }
 
   function captureInviteFromUrlToStorage() {
@@ -203,6 +204,21 @@
     window.currentOrganizationId = orgId || null;
     window.currentOrganizationSlug = slug || null;
     window.currentOrganizationRole = role || null;
+    updateOrgSwitcherLabel();
+  }
+
+  function updateOrgSwitcherLabel() {
+    var el = $('org-switcher-label');
+    if (!el) return;
+    if (window.currentOrganizationSlug) {
+      el.textContent = String(window.currentOrganizationSlug);
+      return;
+    }
+    if (document.body && document.body.classList && document.body.classList.contains('internal-mode')) {
+      el.textContent = 'IDM / Internal tools';
+      return;
+    }
+    el.textContent = 'Choose…';
   }
 
   function escHtml(s) {
@@ -980,26 +996,27 @@
       }
     }
 
-    // Enable internal-only UI for allowlisted developer accounts.
+    // Enable internal-only UI for IDM platform admins.
     try {
       var email = user && user.email ? String(user.email).trim().toLowerCase() : '';
-      if (email === 'contact@ivesdeu.com') {
-        document.body.classList.add('internal-mode');
-      } else {
-        supabase
-          .rpc('is_developer')
-          .then(function (r) {
-            if (r && r.data === true) document.body.classList.add('internal-mode');
-            else document.body.classList.remove('internal-mode');
-          })
-          .catch(function () {
-            document.body.classList.remove('internal-mode');
-          });
-      }
+      // Fallback allowlist keeps internal tools usable before migrations are applied.
+      if (email === 'contact@ivesdeu.com') document.body.classList.add('internal-mode');
+      supabase
+        .rpc('is_platform_admin')
+        .then(function (r) {
+          if (r && r.data === true) document.body.classList.add('internal-mode');
+          else if (email !== 'contact@ivesdeu.com') document.body.classList.remove('internal-mode');
+          updateOrgSwitcherLabel();
+        })
+        .catch(function () {
+          if (email !== 'contact@ivesdeu.com') document.body.classList.remove('internal-mode');
+          updateOrgSwitcherLabel();
+        });
     } catch (_) {
       var email2 = user && user.email ? String(user.email).trim().toLowerCase() : '';
       if (email2 === 'contact@ivesdeu.com') document.body.classList.add('internal-mode');
       else document.body.classList.remove('internal-mode');
+      updateOrgSwitcherLabel();
     }
 
     drainInviteFlashIntoApp();
@@ -1011,7 +1028,7 @@
       window.refreshAgencyMvpForAuthContext();
     }
 
-    // If no org context (developer mode), land on Manage accounts by default.
+    // If no org context (internal mode), land on Manage accounts by default.
     try {
       if (!window.currentOrganizationId && document.body.classList.contains('internal-mode') && typeof window.nav === 'function') {
         window.nav('manager', null);
@@ -1261,6 +1278,16 @@
         }
       });
     }
+
+    var btnOrg = $('btn-org-switcher');
+    if (btnOrg) {
+      btnOrg.addEventListener('click', function () {
+        if (typeof window.openWorkspaceSwitcherModal === 'function') {
+          window.openWorkspaceSwitcherModal();
+        }
+      });
+    }
+
     wireWorkspaceModal();
   }
 

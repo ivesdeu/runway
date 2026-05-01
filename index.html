@@ -1395,6 +1395,15 @@
   <div class="sb-logo">
     <img class="sb-brand-img" id="sb-brand-img" src="/runway-wordmark.svg" width="188" height="28" alt="Runway" loading="eager" decoding="async" />
   </div>
+  <div style="padding: 10px 14px 4px;">
+    <button type="button" class="btn" id="btn-org-switcher" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;">
+      <span style="min-width:0;display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;">
+        <span style="font-size:11px;color:var(--text3);">Organization</span>
+        <span id="org-switcher-label" style="font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px;">—</span>
+      </span>
+      <span style="font-size:12px;color:var(--text3);flex-shrink:0;">Change</span>
+    </button>
+  </div>
   <nav class="sb-nav">
     <div class="nav-lbl">Dashboard</div>
     <div class="ni active" data-nav="leads" onclick="nav('leads',this)">
@@ -1763,7 +1772,11 @@
         <div class="st" style="font-size:13px;margin-bottom:10px;">Organization details</div>
         <div class="fg" style="grid-template-columns: 1fr 1fr; margin-bottom: 0;">
           <div class="fgp" style="grid-column:1/-1;"><label class="fl">Organization name</label><input class="fi" id="dev-org-name" placeholder="Acme Co" /></div>
-          <div class="fgp"><label class="fl">Slug</label><input class="fi" id="dev-org-slug" placeholder="acme-co" /></div>
+          <div class="fgp">
+            <label class="fl">Slug</label>
+            <input class="fi" id="dev-org-slug" placeholder="acme-co" />
+            <div id="dev-org-slug-status" style="font-size:11px;min-height:1.2em;margin-top:6px;color:var(--text3);"></div>
+          </div>
           <div class="fgp"><label class="fl">Admin email</label><input class="fi" id="dev-org-admin-email" placeholder="admin@acme.com" /></div>
         </div>
         <div id="dev-org-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:10px;"></div>
@@ -1782,14 +1795,17 @@
 
   <div class="mo dev-admin-pop" id="mgrCompassModal">
     <div class="md" onclick="event.stopPropagation()" style="max-width:980px;max-height:92vh;display:flex;flex-direction:column;padding:22px 22px 18px;">
-      <div class="mt">Compass organizations</div>
+      <div class="mt" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+        <span>Compass organizations</span>
+        <input class="fi" id="mgr-compass-search" placeholder="Search name / slug / admin email…" style="max-width:420px;" />
+      </div>
       <p class="ss" style="margin: -8px 0 16px; font-size: 13px; line-height: 1.55;">
         Choose an existing Compass organization to enable Runway. Only Compass orgs without Runway are shown.
       </p>
 
       <div id="mgr-compass-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-bottom:12px;"></div>
       <div style="overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--bg2);">
-        <table class="dt" style="margin:0;">
+        <table class="dt" style="margin:0;width:100%;table-layout:fixed;">
           <thead>
             <tr><th>Name</th><th>Slug</th><th>Admin email</th><th>Members</th><th style="text-align:right;">Action</th></tr>
           </thead>

@@ -128,7 +128,8 @@
           '<div><span class="kb" style="font-size:11px;padding:2px 8px;border-radius:999px;">Admin</span> ' +
             '<span style="color:var(--text);">' + escapeHtml(adminEmail) + '</span></div>' +
           '<div><span class="kb bu" style="font-size:11px;padding:2px 8px;border-radius:999px;">Temp password</span> ' +
-            '<code style="font-size:12px;letter-spacing:0.02em;">' + escapeHtml(pw) + '</code>' +
+            '<code data-temp-pw style="font-size:12px;letter-spacing:0.02em;">' + escapeHtml(pw || '—') + '</code>' +
+            '<button type="button" class="btn" data-fetch-temp-pw="1" data-fetch-org-id="' + escapeHtml(orgId) + '" data-fetch-email="' + escapeHtml(adminEmail) + '" style="margin-left:10px;padding:6px 10px;font-size:12px;">Fetch last</button>' +
             '<div style="margin-top:6px;color:var(--text3);font-size:11px;line-height:1.35;">' +
               'Share this once. On first login, they will be prompted to set a new password.' +
             '</div>' +
@@ -146,7 +147,8 @@
           '<div><span class="kb" style="font-size:11px;padding:2px 8px;border-radius:999px;">Email</span> ' +
             '<span style="color:var(--text);">' + escapeHtml(email) + '</span></div>' +
           '<div><span class="kb bu" style="font-size:11px;padding:2px 8px;border-radius:999px;">Temp password</span> ' +
-            '<code style="font-size:12px;letter-spacing:0.02em;">' + escapeHtml(pw) + '</code>' +
+            '<code data-temp-pw style="font-size:12px;letter-spacing:0.02em;">' + escapeHtml(pw || '—') + '</code>' +
+            '<button type="button" class="btn" data-fetch-temp-pw="1" data-fetch-email="' + escapeHtml(email) + '" style="margin-left:10px;padding:6px 10px;font-size:12px;">Fetch last</button>' +
             '<div style="margin-top:6px;color:var(--text3);font-size:11px;line-height:1.35;">' +
               'Share this once. On first login, they will be prompted to set a new password.' +
             '</div>' +
@@ -154,6 +156,33 @@
         '</div>' +
       '</div>'
     );
+  }
+
+  function wireFetchTempPasswordButtons(container) {
+    if (!container) return;
+    container.querySelectorAll('button[data-fetch-temp-pw="1"]').forEach(function (b) {
+      if (b.getAttribute('data-wired') === '1') return;
+      b.setAttribute('data-wired', '1');
+      b.addEventListener('click', function () {
+        var orgId = b.getAttribute('data-fetch-org-id') || '';
+        var email = (b.getAttribute('data-fetch-email') || '').trim();
+        if (!orgId || !email) return;
+        b.disabled = true;
+        var prev = b.textContent;
+        b.textContent = 'Fetching…';
+        fetchDevAdmin({ action: 'get_latest_credentials', organizationId: orgId, email: email })
+          .then(function (j) {
+            var pw = j && j.temporaryPassword ? String(j.temporaryPassword) : '';
+            var code = container.querySelector('code[data-temp-pw]');
+            if (code) code.textContent = pw || '—';
+          })
+          .catch(function () {})
+          .finally(function () {
+            b.disabled = false;
+            b.textContent = prev || 'Fetch last';
+          });
+      });
+    });
   }
 
   function uid(prefix) {
@@ -1410,9 +1439,13 @@
             var sl = escapeHtml(o.slug || '');
             var ae = escapeHtml(o.admin_email || '');
             var mc = typeof o.member_count === 'number' ? String(o.member_count) : escapeHtml(o.member_count || '');
+            var needsOnboarding = o && o.onboarding_completed === false;
+            var tag = needsOnboarding
+              ? '<span class="pill" style="margin-left:8px;background:rgba(245, 158, 11, .16);border-color:rgba(245, 158, 11, .35);color:#f59e0b;">Onboarding</span>'
+              : '';
             return (
               '<tr>' +
-              '<td class="tdp">' + nm + '<span class="td-sub"><code style="font-size:11px;">' + id + '</code></span></td>' +
+              '<td class="tdp">' + nm + tag + '<span class="td-sub"><code style="font-size:11px;">' + id + '</code></span></td>' +
               '<td><code style="font-size:11px;">/' + sl + '</code></td>' +
               '<td>' + ae + '</td>' +
               '<td>' + mc + '</td>' +
@@ -1541,7 +1574,7 @@
             var pw = j.temporaryPassword || '';
             var out = formatProvisionedInviteHtml(email, pw);
             var box = $('mgr-invite-result');
-            if (box) { box.style.display = 'block'; box.innerHTML = out; }
+            if (box) { box.style.display = 'block'; box.innerHTML = out; wireFetchTempPasswordButtons(box); }
             try {
               if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
             } catch (_) {}
@@ -1608,6 +1641,7 @@
             if (box) {
               box.style.display = 'block';
               box.innerHTML = formatProvisionedOrgHtml(j);
+              wireFetchTempPasswordButtons(box);
             }
             try {
               if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
@@ -1637,15 +1671,76 @@
         openCompassOrgPicker();
       });
     }
+
+    // Live slug availability check with taken/available indicator.
+    (function wireSlugAvailability() {
+      var input = $('dev-org-slug');
+      var status = $('dev-org-slug-status');
+      var createBtn = $('btn-dev-org-create');
+      if (!input || !status || !createBtn) return;
+      if (input.getAttribute('data-wired-slug') === '1') return;
+      input.setAttribute('data-wired-slug', '1');
+
+      var timer = null;
+      var last = '';
+      var setState = function (state, msg) {
+        status.textContent = msg || '';
+        status.style.color =
+          state === 'ok' ? '#22c55e' :
+          state === 'bad' ? 'var(--red)' :
+          'var(--text3)';
+        createBtn.disabled = state !== 'ok';
+      };
+
+      var check = function () {
+        var slug = String(input.value || '').trim().toLowerCase();
+        if (!slug) { setState('idle', ''); return; }
+        if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) {
+          setState('bad', 'Use 2–63 chars: lowercase letters, numbers, and hyphens.');
+          return;
+        }
+        setState('idle', 'Checking availability…');
+        last = slug;
+        try {
+          var c = window.supabaseClient;
+          if (!c || !c.rpc) { setState('idle', ''); return; }
+          c.rpc('organization_public_by_slug', { sl: slug }).then(function (r) {
+            if (String(input.value || '').trim().toLowerCase() !== last) return;
+            if (r && r.data && r.data.length) {
+              setState('bad', 'Slug is already taken.');
+            } else {
+              setState('ok', 'Slug is available.');
+            }
+          }).catch(function () {
+            if (String(input.value || '').trim().toLowerCase() !== last) return;
+            setState('idle', '');
+          });
+        } catch (_) {
+          setState('idle', '');
+        }
+      };
+
+      input.addEventListener('input', function () {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(check, 350);
+        // Disable while typing until we have a positive check.
+        createBtn.disabled = true;
+      });
+
+      // On open, run once.
+      setTimeout(check, 0);
+    })();
   }
 
   function openCompassOrgPicker() {
     var m = $('mgrCompassModal');
     var body = $('mgr-compass-tbody');
     var err = $('mgr-compass-error');
+    var search = $('mgr-compass-search');
     var cache = (window.__bizdashCompassMemberCache = window.__bizdashCompassMemberCache || {});
     if (err) err.textContent = '';
     if (body) body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">Loading…</td></tr>';
+    if (search) search.value = '';
     if (m) m.classList.add('on');
 
     fetchDevAdmin({ action: 'list_compass_orgs_without_runway' })
@@ -1656,88 +1751,144 @@
           body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">No Compass-only organizations found.</td></tr>';
           return;
         }
-        body.innerHTML = rows.map(function (o) {
-          var id = escapeHtml(o.id);
-          var nm = escapeHtml(o.name || '');
-          var sl = escapeHtml(o.slug || '');
-          var ae = escapeHtml(o.admin_email || '');
-          var mc = typeof o.member_count === 'number' ? String(o.member_count) : escapeHtml(o.member_count || '');
-          return (
-            '<tr>' +
-              '<td class="tdp">' + nm + '</td>' +
-              '<td><code style="font-size:11px;">/' + sl + '</code></td>' +
-              '<td>' + ae + '</td>' +
-              '<td>' +
-                '<span class="kb" data-members-org="' + id + '" style="font-size:11px;padding:4px 10px;border-radius:999px;cursor:default;position:relative;">' +
-                  mc +
-                  '<span class="mgr-members-tip" style="display:none;position:absolute;left:0;top:calc(100% + 8px);min-width:260px;max-width:380px;z-index:20;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 10px;box-shadow:0 16px 40px rgba(0,0,0,.22);color:var(--text2);font-size:12px;line-height:1.45;">' +
-                    'Loading…' +
+        var allRows = rows.slice();
+
+        function render(list) {
+          body.innerHTML = list.map(function (o) {
+            var id = escapeHtml(o.id);
+            var nmRaw = String(o.name || '');
+            var slRaw = String(o.slug || '');
+            var aeRaw = String(o.admin_email || '');
+            var nm = escapeHtml(nmRaw);
+            var sl = escapeHtml(slRaw);
+            var ae = escapeHtml(aeRaw);
+            var mc = typeof o.member_count === 'number' ? String(o.member_count) : escapeHtml(o.member_count || '');
+            return (
+              '<tr>' +
+                '<td class="tdp" title="' + nm + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nm + '</td>' +
+                '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><code style="font-size:11px;">/' + sl + '</code></td>' +
+                '<td title="' + ae + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ae + '</td>' +
+                '<td>' +
+                  '<span class="kb" data-members-org="' + id + '" style="font-size:11px;padding:4px 10px;border-radius:999px;cursor:default;">' +
+                    mc +
                   '</span>' +
-                '</span>' +
-              '</td>' +
-              '<td style="white-space:nowrap;text-align:right;">' +
-                '<button type="button" class="btn btn-p" data-compass-enable-id="' + id + '">Enable Runway</button>' +
-              '</td>' +
-            '</tr>'
-          );
-        }).join('');
+                '</td>' +
+                '<td style="white-space:nowrap;text-align:right;">' +
+                  '<button type="button" class="btn btn-p" data-compass-enable-id="' + id + '">Enable Runway</button>' +
+                '</td>' +
+              '</tr>'
+            );
+          }).join('');
 
-        body.querySelectorAll('[data-members-org]').forEach(function (el) {
-          var orgId = el.getAttribute('data-members-org') || '';
-          var tip = el.querySelector('.mgr-members-tip');
-          if (!orgId || !tip) return;
-          var showTip = function () {
-            tip.style.display = 'block';
-            if (cache[orgId] && cache[orgId].html) {
-              tip.innerHTML = cache[orgId].html;
-              return;
-            }
-            tip.textContent = 'Loading…';
-            fetchDevAdmin({ action: 'org_members', organizationId: orgId })
-              .then(function (j2) {
-                var ms = (j2 && j2.members) || [];
-                var emails = ms
-                  .map(function (m) { return (m && m.email) ? String(m.email) : ''; })
-                  .filter(function (s) { return s && s.trim(); });
-                var html = '<div style="font-weight:600;color:var(--text);margin-bottom:6px;">Members</div>' +
-                  (emails.length
-                    ? '<div style="display:grid;gap:4px;">' + emails.map(function (e) {
-                        return '<div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);">' + escapeHtml(e) + '</div>';
-                      }).join('') + '</div>'
-                    : '<div style="color:var(--text3);">No members found.</div>');
-                cache[orgId] = { html: html };
-                tip.innerHTML = html;
-              })
-              .catch(function (e) {
-                tip.textContent = String((e && e.message) || e || 'Failed');
-              });
-          };
-          var hideTip = function () { tip.style.display = 'none'; };
-          el.addEventListener('mouseenter', showTip);
-          el.addEventListener('mouseleave', hideTip);
-        });
+          wireMembersTooltip();
+          wireEnableButtons();
+        }
 
-        body.querySelectorAll('button[data-compass-enable-id]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            var orgId = b.getAttribute('data-compass-enable-id') || '';
+        function getTipEl() {
+          var el = document.getElementById('mgrMembersTipFloat');
+          if (el) return el;
+          el = document.createElement('div');
+          el.id = 'mgrMembersTipFloat';
+          el.style.position = 'fixed';
+          el.style.display = 'none';
+          el.style.minWidth = '260px';
+          el.style.maxWidth = '420px';
+          el.style.zIndex = '9999';
+          el.style.background = 'var(--panel)';
+          el.style.border = '1px solid var(--border)';
+          el.style.borderRadius = '12px';
+          el.style.padding = '10px 10px';
+          el.style.boxShadow = '0 16px 40px rgba(0,0,0,.22)';
+          el.style.color = 'var(--text2)';
+          el.style.fontSize = '12px';
+          el.style.lineHeight = '1.45';
+          document.body.appendChild(el);
+          return el;
+        }
+
+        function wireMembersTooltip() {
+          body.querySelectorAll('[data-members-org]').forEach(function (chip) {
+            var orgId = chip.getAttribute('data-members-org') || '';
             if (!orgId) return;
-            if (err) err.textContent = '';
-            b.disabled = true;
-            b.textContent = 'Enabling…';
-            fetchDevAdmin({ action: 'enable_runway_for_org', organizationId: orgId })
-              .then(function () {
-                closeCompassOrgPicker();
-                try {
-                  if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
-                } catch (_) {}
-              })
-              .catch(function (e) {
-                b.disabled = false;
-                b.textContent = 'Enable Runway';
-                if (err) err.textContent = String((e && e.message) || e || 'Failed');
-              });
+            var tipEl = getTipEl();
+            var show = function () {
+              var r = chip.getBoundingClientRect();
+              tipEl.style.left = Math.max(12, Math.min(r.left, window.innerWidth - 440)) + 'px';
+              tipEl.style.top = Math.min(window.innerHeight - 40, r.bottom + 10) + 'px';
+              tipEl.style.display = 'block';
+              if (cache[orgId] && cache[orgId].html) {
+                tipEl.innerHTML = cache[orgId].html;
+                return;
+              }
+              tipEl.textContent = 'Loading…';
+              fetchDevAdmin({ action: 'org_members', organizationId: orgId })
+                .then(function (j2) {
+                  var ms = (j2 && j2.members) || [];
+                  var emails = ms
+                    .map(function (m) { return (m && m.email) ? String(m.email) : ''; })
+                    .filter(function (s) { return s && s.trim(); });
+                  var html = '<div style="font-weight:600;color:var(--text);margin-bottom:6px;">Members</div>' +
+                    (emails.length
+                      ? '<div style="display:grid;gap:4px;">' + emails.map(function (e) {
+                          return '<div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(e) + '</div>';
+                        }).join('') + '</div>'
+                      : '<div style="color:var(--text3);">No members found.</div>');
+                  cache[orgId] = { html: html };
+                  tipEl.innerHTML = html;
+                })
+                .catch(function (e) {
+                  tipEl.textContent = String((e && e.message) || e || 'Failed');
+                });
+            };
+            var hide = function () { tipEl.style.display = 'none'; };
+            chip.addEventListener('mouseenter', show);
+            chip.addEventListener('mouseleave', hide);
           });
-        });
+        }
+
+        function wireEnableButtons() {
+          body.querySelectorAll('button[data-compass-enable-id]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var orgId = b.getAttribute('data-compass-enable-id') || '';
+              if (!orgId) return;
+              if (err) err.textContent = '';
+              b.disabled = true;
+              b.textContent = 'Enabling…';
+              fetchDevAdmin({ action: 'enable_runway_for_org', organizationId: orgId })
+                .then(function () {
+                  closeCompassOrgPicker();
+                  try {
+                    if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
+                  } catch (_) {}
+                })
+                .catch(function (e) {
+                  b.disabled = false;
+                  b.textContent = 'Enable Runway';
+                  if (err) err.textContent = String((e && e.message) || e || 'Failed');
+                });
+            });
+          });
+        }
+
+        function applyFilter() {
+          var q = (search && search.value ? String(search.value) : '').trim().toLowerCase();
+          if (!q) { render(allRows); return; }
+          var filtered = allRows.filter(function (o) {
+            var nm = String(o.name || '').toLowerCase();
+            var sl = String(o.slug || '').toLowerCase();
+            var ae = String(o.admin_email || '').toLowerCase();
+            return nm.indexOf(q) !== -1 || sl.indexOf(q) !== -1 || ae.indexOf(q) !== -1;
+          });
+          render(filtered);
+        }
+
+        if (search && search.getAttribute('data-wired') !== '1') {
+          search.setAttribute('data-wired', '1');
+          search.addEventListener('input', function () { applyFilter(); });
+        }
+
+        render(allRows);
+
       })
       .catch(function (e) {
         if (err) err.textContent = String((e && e.message) || e || 'Failed');

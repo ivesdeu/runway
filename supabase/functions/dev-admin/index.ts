@@ -24,7 +24,8 @@ type Action =
   | "org_members"
   | "list_runway_orgs"
   | "list_compass_orgs_without_runway"
-  | "enable_runway_for_org";
+  | "enable_runway_for_org"
+  | "get_latest_credentials";
 
 function isValidEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -86,7 +87,8 @@ serve(async (req) => {
     action !== "org_members" &&
     action !== "list_runway_orgs" &&
     action !== "list_compass_orgs_without_runway" &&
-    action !== "enable_runway_for_org"
+    action !== "enable_runway_for_org" &&
+    action !== "get_latest_credentials"
   ) {
     return json(req, 400, { error: "Unknown action" });
   }
@@ -103,16 +105,12 @@ serve(async (req) => {
   if (!callerEmail) return json(req, 403, { error: "Developer access denied" });
 
   // Developer gate:
-  // - Preferred: `developer_accounts` allowlist
+  // - Preferred: IDM org membership with role `platform_admin` (RPC: is_platform_admin)
   // - Fallback: hard allow `contact@ivesdeu.com` so dev tools work even before migrations are applied.
   let isDev = callerEmail === "contact@ivesdeu.com";
   try {
-    const { data: devRow, error: devErr } = await admin
-      .from("developer_accounts")
-      .select("email")
-      .eq("email", callerEmail)
-      .maybeSingle();
-    if (!devErr && devRow) isDev = true;
+    const { data: plat, error: pErr } = await admin.rpc("is_platform_admin");
+    if (!pErr && plat === true) isDev = true;
   } catch (_) {}
   if (!isDev) return json(req, 403, { error: "Developer access denied" });
 
@@ -133,7 +131,7 @@ serve(async (req) => {
         admin_email: adminEmail,
         onboarding_completed: false,
       })
-      .select("id, slug, name, admin_email, created_at")
+      .select("id, slug, name, admin_email, created_at, onboarding_completed")
       .single();
     if (orgErr) return json(req, 400, { error: orgErr.message });
 
@@ -178,6 +176,12 @@ serve(async (req) => {
     // Only force password change for newly provisioned accounts.
     if (temporaryPassword) {
       await admin.from("user_security").upsert({ user_id: targetUserId, must_change_password: true });
+      await admin.from("organization_provisioning_credentials").insert({
+        organization_id: orgIns.id,
+        email: adminEmail,
+        kind: "org_admin",
+        temporary_password: temporaryPassword,
+      });
     }
 
     return json(req, 200, { ok: true, organization: orgIns, userId: targetUserId, temporaryPassword });
@@ -204,7 +208,7 @@ serve(async (req) => {
     if (!ids.length) return [];
     const { data: orgs, error } = await admin
       .from("organizations")
-      .select("id, slug, name, admin_email, created_at")
+      .select("id, slug, name, admin_email, created_at, onboarding_completed")
       .in("id", ids)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
@@ -214,7 +218,7 @@ serve(async (req) => {
   if (action === "list_orgs") {
     const { data: orgs, error } = await admin
       .from("organizations")
-      .select("id, slug, name, admin_email, created_at")
+      .select("id, slug, name, admin_email, created_at, onboarding_completed")
       .order("created_at", { ascending: false });
     if (error) return json(req, 400, { error: error.message });
 
@@ -307,6 +311,23 @@ serve(async (req) => {
     return json(req, 200, { ok: true });
   }
 
+  if (action === "get_latest_credentials") {
+    const organizationId = String(payload.organizationId || "").trim();
+    const email = normEmail(payload.email);
+    if (!organizationId) return json(req, 400, { error: "organizationId is required" });
+    if (!email) return json(req, 400, { error: "email is required" });
+    const { data, error } = await admin
+      .from("organization_provisioning_credentials")
+      .select("temporary_password, created_at, kind")
+      .eq("organization_id", organizationId)
+      .eq("email", email)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) return json(req, 400, { error: error.message });
+    const row = data && data[0] ? data[0] as { temporary_password?: string; created_at?: string; kind?: string } : null;
+    return json(req, 200, { ok: true, temporaryPassword: row?.temporary_password || null, created_at: row?.created_at || null, kind: row?.kind || null });
+  }
+
   if (action === "org_members") {
     const organizationId = String(payload.organizationId || "").trim();
     if (!organizationId) return json(req, 400, { error: "organizationId is required" });
@@ -382,6 +403,12 @@ serve(async (req) => {
 
   if (temporaryPassword) {
     await admin.from("user_security").upsert({ user_id: targetUserId, must_change_password: true });
+    await admin.from("organization_provisioning_credentials").insert({
+      organization_id: organizationId,
+      email,
+      kind: "invite_user",
+      temporary_password: temporaryPassword,
+    });
   }
 
   return json(req, 200, { ok: true, userId: targetUserId, temporaryPassword });
