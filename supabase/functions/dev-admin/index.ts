@@ -17,7 +17,14 @@ function slugOk(s: string): boolean {
   return /^[a-z0-9][a-z0-9-]{1,62}$/.test(s);
 }
 
-type Action = "create_org" | "invite_user" | "list_orgs" | "org_members";
+type Action =
+  | "create_org"
+  | "invite_user"
+  | "list_orgs"
+  | "org_members"
+  | "list_runway_orgs"
+  | "list_compass_orgs_without_runway"
+  | "enable_runway_for_org";
 
 function isValidEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -139,7 +146,8 @@ serve(async (req) => {
     if (entErr) return json(req, 400, { error: entErr.message });
 
     // Provision initial admin user with a temporary password.
-    const temporaryPassword = generateTempPassword15();
+    // Important: If this email already exists, DO NOT reset their password. Users may belong to multiple orgs/apps.
+    let temporaryPassword: string | null = null;
 
     let targetUserId: string | null = null;
     try {
@@ -148,6 +156,7 @@ serve(async (req) => {
     } catch (_) {}
 
     if (!targetUserId) {
+      temporaryPassword = generateTempPassword15();
       const { data: created, error: cErr } = await admin.auth.admin.createUser({
         email: adminEmail,
         password: temporaryPassword,
@@ -156,9 +165,6 @@ serve(async (req) => {
       });
       if (cErr) return json(req, 400, { error: cErr.message });
       targetUserId = created?.user?.id || null;
-    } else {
-      const { error: uErr } = await admin.auth.admin.updateUserById(targetUserId, { password: temporaryPassword });
-      if (uErr) return json(req, 400, { error: uErr.message });
     }
 
     if (!targetUserId) return json(req, 500, { error: "Could not provision admin user" });
@@ -169,7 +175,10 @@ serve(async (req) => {
     );
     if (memErr) return json(req, 400, { error: memErr.message });
 
-    await admin.from("user_security").upsert({ user_id: targetUserId, must_change_password: true });
+    // Only force password change for newly provisioned accounts.
+    if (temporaryPassword) {
+      await admin.from("user_security").upsert({ user_id: targetUserId, must_change_password: true });
+    }
 
     return json(req, 200, { ok: true, organization: orgIns, userId: targetUserId, temporaryPassword });
   }
@@ -231,7 +240,9 @@ serve(async (req) => {
       .eq("app_key", "runway")
       .eq("enabled", true);
     if (error) return json(req, 400, { error: error.message });
-    const ids = Array.from(new Set((rows || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean)));
+    const ids: string[] = Array.from(
+      new Set((rows || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean)),
+    );
     try {
       const orgs = await listOrgsByIds(ids);
       const memberCounts = await memberCountsForOrgIds(ids);
@@ -261,9 +272,13 @@ serve(async (req) => {
       .eq("enabled", true);
     if (rErr) return json(req, 400, { error: rErr.message });
 
-    const compassIds = new Set((comp || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean));
-    const runwayIds = new Set((run || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean));
-    const ids = Array.from(compassIds).filter((id) => !runwayIds.has(id));
+    const compassIds: Set<string> = new Set(
+      (comp || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean),
+    );
+    const runwayIds: Set<string> = new Set(
+      (run || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean),
+    );
+    const ids: string[] = Array.from(compassIds).filter((id) => !runwayIds.has(id));
 
     try {
       const orgs = await listOrgsByIds(ids);
@@ -335,9 +350,9 @@ serve(async (req) => {
     return json(req, 400, { error: "Invalid role" });
   }
 
-  // TEMP provisioning: create user with a random temporary password (returned to developer).
-  // Immediately add org membership so the account can log in and access the workspace.
-  const temporaryPassword = generateTempPassword15();
+  // TEMP provisioning: if user doesn't exist, create with a random temporary password (returned to developer).
+  // If user exists, add membership only and do NOT reset their password (supports multi-org users).
+  let temporaryPassword: string | null = null;
 
   // Create or fetch user id.
   let targetUserId: string | null = null;
@@ -347,6 +362,7 @@ serve(async (req) => {
   } catch (_) {}
 
   if (!targetUserId) {
+    temporaryPassword = generateTempPassword15();
     const { data: created, error: cErr } = await admin.auth.admin.createUser({
       email,
       password: temporaryPassword,
@@ -355,9 +371,6 @@ serve(async (req) => {
     });
     if (cErr) return json(req, 400, { error: cErr.message });
     targetUserId = created?.user?.id || null;
-  } else {
-    const { error: uErr } = await admin.auth.admin.updateUserById(targetUserId, { password: temporaryPassword });
-    if (uErr) return json(req, 400, { error: uErr.message });
   }
   if (!targetUserId) return json(req, 500, { error: "Could not provision user" });
 
@@ -367,7 +380,9 @@ serve(async (req) => {
   );
   if (memErr) return json(req, 400, { error: memErr.message });
 
-  await admin.from("user_security").upsert({ user_id: targetUserId, must_change_password: true });
+  if (temporaryPassword) {
+    await admin.from("user_security").upsert({ user_id: targetUserId, must_change_password: true });
+  }
 
   return json(req, 200, { ok: true, userId: targetUserId, temporaryPassword });
 });

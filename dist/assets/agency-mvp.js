@@ -952,6 +952,14 @@
       crmSource = loadCrmSource();
       return hydrateStateFromSupabase().then(renderAfterHydrate).catch(function () {});
     }
+    // If signed in but no org is selected/allowed (e.g. developer internal mode), do not show demo seed.
+    if (!isDemoUser() && activeUserId() !== 'guest' && activeOrgId() === 'noorg') {
+      state = emptyState();
+      saveStateWithoutUploadSync();
+      crmSource = loadCrmSource();
+      renderAfterHydrate();
+      return Promise.resolve();
+    }
     if (isDemoUser()) {
       saveCrmSource('internal');
       crmSource = 'internal';
