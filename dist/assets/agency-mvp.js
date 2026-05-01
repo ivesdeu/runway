@@ -165,8 +165,10 @@
   }
 
   function apiUrl(path) {
+    var p = String(path || '');
+    if (/^https?:\/\//i.test(p)) return p;
     var b = apiBase();
-    return b ? b + path : path;
+    return b ? b + p : p;
   }
 
   function currentOrganizationId() {
