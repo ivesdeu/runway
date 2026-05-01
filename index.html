@@ -894,7 +894,10 @@
   /* Internal-only mode: visibility toggles (PUBLIC_MODE uses defaults below). Do not delete rules. */
   .ui-internal-facing { display: none; }
   body.internal-mode .ui-public-facing { display: none !important; }
-  body.internal-mode .ui-internal-facing { display: block !important; }
+  body.internal-mode .ui-internal-facing:not(.pg) { display: block !important; }
+  /* Ensure internal-only pages still obey the .pg/.on router visibility rules. */
+  body.internal-mode .pg.ui-internal-facing { display: none; }
+  body.internal-mode .pg.ui-internal-facing.on { display: block; }
   body.internal-mode .nav-public-facing { display: none !important; }
 
   /* Auth gate: app hidden until authenticated (fill viewport so flex centering is visible) */
@@ -1794,17 +1797,17 @@
   </div>
 
   <div class="mo dev-admin-pop" id="mgrCompassModal">
-    <div class="md" onclick="event.stopPropagation()" style="max-width:980px;max-height:92vh;display:flex;flex-direction:column;padding:22px 22px 18px;">
-      <div class="mt" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+    <div class="md" onclick="event.stopPropagation()" style="max-width:1280px;width:min(1280px,calc(100vw - 64px));max-height:94vh;display:flex;flex-direction:column;padding:28px 28px 22px;">
+      <div class="mt" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
         <span>Compass organizations</span>
-        <input class="fi" id="mgr-compass-search" placeholder="Search name / slug / admin email…" style="max-width:420px;" />
+        <input class="fi" id="mgr-compass-search" placeholder="Search name / slug / admin email…" style="max-width:520px;min-width:280px;flex:1;" />
       </div>
-      <p class="ss" style="margin: -8px 0 16px; font-size: 13px; line-height: 1.55;">
+      <p class="ss" style="margin: -6px 0 18px; font-size: 13px; line-height: 1.55;">
         Choose an existing Compass organization to enable Runway. Only Compass orgs without Runway are shown.
       </p>
 
       <div id="mgr-compass-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-bottom:12px;"></div>
-      <div style="overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--bg2);">
+      <div style="overflow:auto;border:1px solid var(--border);border-radius:16px;background:var(--bg2);">
         <table class="dt" style="margin:0;width:100%;table-layout:fixed;">
           <thead>
             <tr><th>Name</th><th>Slug</th><th>Admin email</th><th>Members</th><th style="text-align:right;">Action</th></tr>
@@ -1813,7 +1816,7 @@
         </table>
       </div>
 
-      <div class="mf" style="margin-top:14px;">
+      <div class="mf" style="margin-top:16px;">
         <button type="button" class="btn" id="btn-mgr-compass-close">Close</button>
       </div>
     </div>
@@ -1878,20 +1881,6 @@
   <div class="md" onclick="event.stopPropagation()" style="max-width:620px;">
     <div class="mt">Workspaces</div>
     <div id="workspace-list" style="margin-bottom:12px;"></div>
-    <div class="hr" style="margin-bottom:10px;">
-      <button type="button" class="btn" id="btn-workspace-add-another">Add another workspace</button>
-    </div>
-    <div id="workspace-add-panel" style="display:none;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg3);margin-bottom:10px;">
-      <div class="fg" style="grid-template-columns:1fr 1fr;">
-        <div class="fgp"><label class="fl">Workspace name</label><input class="fi" id="ws-new-name" /></div>
-        <div class="fgp"><label class="fl">Workspace slug</label><input class="fi" id="ws-new-slug" placeholder="my-company" /></div>
-      </div>
-      <div id="workspace-add-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:8px;"></div>
-      <div class="hr" style="margin-top:8px;">
-        <button type="button" class="btn btn-p" id="btn-workspace-create-submit">Create workspace</button>
-        <button type="button" class="btn" id="btn-workspace-add-cancel">Cancel</button>
-      </div>
-    </div>
     <div class="mf" style="margin-top:10px;">
       <button type="button" class="btn" id="btn-workspace-modal-close">Close</button>
     </div>

@@ -716,71 +716,10 @@
         if (m) m.classList.remove('on');
       });
     }
-    var addBtn = $('btn-workspace-add-another');
-    var panel = $('workspace-add-panel');
-    var createBtn = $('btn-workspace-create-submit');
-    var cancelBtn = $('btn-workspace-add-cancel');
-    if (addBtn && addBtn.getAttribute('data-wired') !== '1') {
-      addBtn.setAttribute('data-wired', '1');
-      addBtn.addEventListener('click', function () {
-        if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-      });
-    }
-    if (cancelBtn && cancelBtn.getAttribute('data-wired') !== '1') {
-      cancelBtn.setAttribute('data-wired', '1');
-      cancelBtn.addEventListener('click', function () {
-        if (panel) panel.style.display = 'none';
-      });
-    }
-    if (createBtn && createBtn.getAttribute('data-wired') !== '1') {
-      createBtn.setAttribute('data-wired', '1');
-      createBtn.addEventListener('click', async function () {
-        var err = $('workspace-add-error');
-        if (err) err.textContent = '';
-        var nm = ($('ws-new-name') && $('ws-new-name').value.trim()) || '';
-        var sl = ($('ws-new-slug') && $('ws-new-slug').value.trim().toLowerCase()) || '';
-        if (!nm) {
-          if (err) err.textContent = 'Workspace name is required.';
-          return;
-        }
-        if (!slugClientValid(sl)) {
-          if (err)
-            err.textContent =
-              'URL slug: 2–63 characters, lowercase letters, numbers, or hyphens; must start with a letter or number.';
-          return;
-        }
-        var takenWs = await workspaceSlugTakenByAnotherOrg(sl, null);
-        if (takenWs.rpcError) {
-          if (err) err.textContent = 'Could not verify that URL. Try again.';
-          return;
-        }
-        if (takenWs.taken) {
-          if (err) err.textContent = 'That workspace URL is already taken. Choose a different slug.';
-          return;
-        }
-        var rpcRes = await supabase.rpc('create_workspace_for_user', { p_name: nm, p_slug: sl });
-        var payload = rpcRes.data;
-        if (typeof payload === 'string') {
-          try {
-            payload = JSON.parse(payload);
-          } catch (_) {}
-        }
-        if (rpcRes.error || !payload || typeof payload !== 'object' || !payload.ok) {
-          if (err) err.textContent = payload && payload.error ? String(payload.error) : 'Could not create workspace.';
-          return;
-        }
-        var newSlug = payload.slug ? String(payload.slug) : sl;
-        window.location.assign('/' + newSlug + '/' + (window.location.search || ''));
-      });
-    }
   }
 
   window.openWorkspaceSwitcherModal = async function () {
     var m = $('workspaceModal');
-    var panel = $('workspace-add-panel');
-    if (panel) panel.style.display = 'none';
-    var err = $('workspace-add-error');
-    if (err) err.textContent = '';
     wireWorkspaceModal();
     await refreshWorkspaceModalList();
     if (m) m.classList.add('on');

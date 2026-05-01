@@ -1765,9 +1765,9 @@
             var mc = typeof o.member_count === 'number' ? String(o.member_count) : escapeHtml(o.member_count || '');
             return (
               '<tr>' +
-                '<td class="tdp" title="' + nm + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nm + '</td>' +
-                '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><code style="font-size:11px;">/' + sl + '</code></td>' +
-                '<td title="' + ae + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ae + '</td>' +
+                '<td class="tdp" title="' + nm + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:16px;padding-bottom:16px;">' + nm + '</td>' +
+                '<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:16px;padding-bottom:16px;"><code style="font-size:11px;">/' + sl + '</code></td>' +
+                '<td title="' + ae + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:16px;padding-bottom:16px;">' + ae + '</td>' +
                 '<td>' +
                   '<span class="kb" data-members-org="' + id + '" style="font-size:11px;padding:4px 10px;border-radius:999px;cursor:default;">' +
                     mc +
