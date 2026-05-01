@@ -72,7 +72,15 @@ serve(async (req) => {
   }
 
   const action = String(payload.action || "") as Action;
-  if (action !== "create_org" && action !== "invite_user" && action !== "list_orgs" && action !== "org_members") {
+  if (
+    action !== "create_org" &&
+    action !== "invite_user" &&
+    action !== "list_orgs" &&
+    action !== "org_members" &&
+    action !== "list_runway_orgs" &&
+    action !== "list_compass_orgs_without_runway" &&
+    action !== "enable_runway_for_org"
+  ) {
     return json(req, 400, { error: "Unknown action" });
   }
 
@@ -122,6 +130,14 @@ serve(async (req) => {
       .single();
     if (orgErr) return json(req, 400, { error: orgErr.message });
 
+    // Entitlements: Runway implies Compass.
+    const entRows = [
+      { organization_id: orgIns.id, app_key: "compass", enabled: true },
+      { organization_id: orgIns.id, app_key: "runway", enabled: true },
+    ];
+    const { error: entErr } = await admin.from("organization_apps").upsert(entRows, { onConflict: "organization_id,app_key" });
+    if (entErr) return json(req, 400, { error: entErr.message });
+
     // Provision initial admin user with a temporary password.
     const temporaryPassword = generateTempPassword15();
 
@@ -158,6 +174,34 @@ serve(async (req) => {
     return json(req, 200, { ok: true, organization: orgIns, userId: targetUserId, temporaryPassword });
   }
 
+  async function memberCountsForOrgIds(ids: string[]) {
+    const memberCounts: Record<string, number> = {};
+    if (!ids.length) return memberCounts;
+    const { data: counts, error: cErr } = await admin
+      .from("organization_members")
+      .select("organization_id")
+      .in("organization_id", ids);
+    if (!cErr && counts) {
+      for (const row of counts) {
+        const oid = String((row as { organization_id?: string }).organization_id || "");
+        if (!oid) continue;
+        memberCounts[oid] = (memberCounts[oid] || 0) + 1;
+      }
+    }
+    return memberCounts;
+  }
+
+  async function listOrgsByIds(ids: string[]) {
+    if (!ids.length) return [];
+    const { data: orgs, error } = await admin
+      .from("organizations")
+      .select("id, slug, name, admin_email, created_at")
+      .in("id", ids)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return orgs || [];
+  }
+
   if (action === "list_orgs") {
     const { data: orgs, error } = await admin
       .from("organizations")
@@ -166,20 +210,7 @@ serve(async (req) => {
     if (error) return json(req, 400, { error: error.message });
 
     const ids = (orgs || []).map((o) => (o as { id: string }).id);
-    const memberCounts: Record<string, number> = {};
-    if (ids.length) {
-      const { data: counts, error: cErr } = await admin
-        .from("organization_members")
-        .select("organization_id")
-        .in("organization_id", ids);
-      if (!cErr && counts) {
-        for (const row of counts) {
-          const oid = String((row as { organization_id?: string }).organization_id || "");
-          if (!oid) continue;
-          memberCounts[oid] = (memberCounts[oid] || 0) + 1;
-        }
-      }
-    }
+    const memberCounts = await memberCountsForOrgIds(ids);
 
     return json(req, 200, {
       ok: true,
@@ -191,6 +222,74 @@ serve(async (req) => {
         };
       }),
     });
+  }
+
+  if (action === "list_runway_orgs") {
+    const { data: rows, error } = await admin
+      .from("organization_apps")
+      .select("organization_id")
+      .eq("app_key", "runway")
+      .eq("enabled", true);
+    if (error) return json(req, 400, { error: error.message });
+    const ids = Array.from(new Set((rows || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean)));
+    try {
+      const orgs = await listOrgsByIds(ids);
+      const memberCounts = await memberCountsForOrgIds(ids);
+      return json(req, 200, {
+        ok: true,
+        organizations: orgs.map((o) => {
+          const id = String((o as { id?: string }).id || "");
+          return { ...o, member_count: memberCounts[id] || 0 };
+        }),
+      });
+    } catch (e) {
+      return json(req, 400, { error: String((e as Error).message || e) });
+    }
+  }
+
+  if (action === "list_compass_orgs_without_runway") {
+    const { data: comp, error: cErr } = await admin
+      .from("organization_apps")
+      .select("organization_id")
+      .eq("app_key", "compass")
+      .eq("enabled", true);
+    if (cErr) return json(req, 400, { error: cErr.message });
+    const { data: run, error: rErr } = await admin
+      .from("organization_apps")
+      .select("organization_id")
+      .eq("app_key", "runway")
+      .eq("enabled", true);
+    if (rErr) return json(req, 400, { error: rErr.message });
+
+    const compassIds = new Set((comp || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean));
+    const runwayIds = new Set((run || []).map((r) => String((r as { organization_id?: string }).organization_id || "")).filter(Boolean));
+    const ids = Array.from(compassIds).filter((id) => !runwayIds.has(id));
+
+    try {
+      const orgs = await listOrgsByIds(ids);
+      const memberCounts = await memberCountsForOrgIds(ids);
+      return json(req, 200, {
+        ok: true,
+        organizations: orgs.map((o) => {
+          const id = String((o as { id?: string }).id || "");
+          return { ...o, member_count: memberCounts[id] || 0 };
+        }),
+      });
+    } catch (e) {
+      return json(req, 400, { error: String((e as Error).message || e) });
+    }
+  }
+
+  if (action === "enable_runway_for_org") {
+    const organizationId = String(payload.organizationId || "").trim();
+    if (!organizationId) return json(req, 400, { error: "organizationId is required" });
+    const entRows = [
+      { organization_id: organizationId, app_key: "compass", enabled: true },
+      { organization_id: organizationId, app_key: "runway", enabled: true },
+    ];
+    const { error: entErr } = await admin.from("organization_apps").upsert(entRows, { onConflict: "organization_id,app_key" });
+    if (entErr) return json(req, 400, { error: entErr.message });
+    return json(req, 200, { ok: true });
   }
 
   if (action === "org_members") {

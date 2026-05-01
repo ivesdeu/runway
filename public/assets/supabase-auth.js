@@ -344,6 +344,23 @@
         return { ok: false };
       }
       var org = pubRes.data[0];
+
+      // App gate: this Runway frontend only allows orgs with runway enabled.
+      try {
+        var appRes = await retryOnAuthLock(function () {
+          return supabase.rpc('org_app_enabled', { p_org_id: org.id, p_app_key: 'runway' });
+        });
+        if (appRes.error || appRes.data !== true) {
+          gateErr('You do not have access to this workspace.');
+          clearOrgContext();
+          return { ok: false };
+        }
+      } catch (_) {
+        gateErr('You do not have access to this workspace.');
+        clearOrgContext();
+        return { ok: false };
+      }
+
       var memRes = await retryOnAuthLock(function () {
         return supabase
           .from('organization_members')
@@ -370,7 +387,7 @@
     }
 
     var listRes = await retryOnAuthLock(function () {
-      return supabase.rpc('my_organizations');
+      return supabase.rpc('my_enabled_organizations', { p_app_key: 'runway' });
     });
     if (listRes.error) {
       console.error('my_organizations failed', listRes.error);
@@ -665,7 +682,7 @@
     var u = sessRes && sessRes.data && sessRes.data.session && sessRes.data.session.user;
     if (!u) return;
     var listRes = await retryOnAuthLock(function () {
-      return supabase.rpc('my_organizations');
+      return supabase.rpc('my_enabled_organizations', { p_app_key: 'runway' });
     });
     if (listRes.error || !listRes.data) {
       renderWorkspaceList([]);
@@ -994,7 +1011,7 @@
       window.refreshAgencyMvpForAuthContext();
     }
 
-    // If no org context (developer mode), land on Manager accounts by default.
+    // If no org context (developer mode), land on Manage accounts by default.
     try {
       if (!window.currentOrganizationId && document.body.classList.contains('internal-mode') && typeof window.nav === 'function') {
         window.nav('manager', null);

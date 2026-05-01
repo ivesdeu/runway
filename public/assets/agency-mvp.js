@@ -111,6 +111,51 @@
       .replace(/"/g, '&quot;');
   }
 
+  function formatProvisionedOrgHtml(j) {
+    var org = (j && j.organization) || {};
+    var orgId = org.id || '';
+    var orgSlug = org.slug || '';
+    var adminEmail = org.admin_email || '';
+    var pw = (j && j.temporaryPassword) || '';
+    return (
+      '<div class="card" style="margin-top:10px;padding:12px 12px;border-radius:12px;border:1px solid var(--border);background:var(--panel);">' +
+        '<div class="st" style="margin:0 0 8px 0;">Provisioning details</div>' +
+        '<div style="display:grid;gap:8px;font-size:12px;color:var(--text2);">' +
+          '<div><span class="kb" style="font-size:11px;padding:2px 8px;border-radius:999px;">Org</span> ' +
+            '<code style="font-size:11px;">' + escapeHtml(orgSlug) + '</code>' +
+            '<div class="td-sub" style="margin-top:4px;"><code style="font-size:11px;">' + escapeHtml(orgId) + '</code></div>' +
+          '</div>' +
+          '<div><span class="kb" style="font-size:11px;padding:2px 8px;border-radius:999px;">Admin</span> ' +
+            '<span style="color:var(--text);">' + escapeHtml(adminEmail) + '</span></div>' +
+          '<div><span class="kb bu" style="font-size:11px;padding:2px 8px;border-radius:999px;">Temp password</span> ' +
+            '<code style="font-size:12px;letter-spacing:0.02em;">' + escapeHtml(pw) + '</code>' +
+            '<div style="margin-top:6px;color:var(--text3);font-size:11px;line-height:1.35;">' +
+              'Share this once. On first login, they will be prompted to set a new password.' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function formatProvisionedInviteHtml(email, pw) {
+    return (
+      '<div class="card" style="margin-top:10px;padding:12px 12px;border-radius:12px;border:1px solid var(--border);background:var(--panel);">' +
+        '<div class="st" style="margin:0 0 8px 0;">Invite credentials</div>' +
+        '<div style="display:grid;gap:8px;font-size:12px;color:var(--text2);">' +
+          '<div><span class="kb" style="font-size:11px;padding:2px 8px;border-radius:999px;">Email</span> ' +
+            '<span style="color:var(--text);">' + escapeHtml(email) + '</span></div>' +
+          '<div><span class="kb bu" style="font-size:11px;padding:2px 8px;border-radius:999px;">Temp password</span> ' +
+            '<code style="font-size:12px;letter-spacing:0.02em;">' + escapeHtml(pw) + '</code>' +
+            '<div style="margin-top:6px;color:var(--text3);font-size:11px;line-height:1.35;">' +
+              'Share this once. On first login, they will be prompted to set a new password.' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   function uid(prefix) {
     return (prefix || 'id') + '-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
   }
@@ -1127,23 +1172,10 @@
               return devAdminCall({ action: 'create_org', name: name, slug: slug, adminEmail: adminEmail });
             })
             .then(function (j) {
-              var org = (j && j.organization) || {};
-              var orgId = org.id || '';
-              var orgSlug = org.slug || '';
-              var adminEmail = org.admin_email || '';
-              var pw = j.temporaryPassword || '';
-              showDevResult(
-                'dev-org-result',
-                'Created org + provisioned admin.<br><strong>Organization ID:</strong> <code style="font-size:11px;">' +
-                  escapeHtml(orgId) +
-                  '</code><br><strong>Slug:</strong> <code style="font-size:11px;">' +
-                  escapeHtml(orgSlug) +
-                  '</code><br><strong>Admin email:</strong> <code style="font-size:11px;">' +
-                  escapeHtml(adminEmail) +
-                  '</code><br><strong>Temporary password:</strong> <code style="font-size:11px;">' +
-                  escapeHtml(pw) +
-                  '</code>'
-              );
+              showDevResult('dev-org-result', formatProvisionedOrgHtml(j));
+              try {
+                if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
+              } catch (_) {}
             })
             .catch(function (err) {
               showDevError('dev-org-error', String((err && err.message) || err || 'Failed'));
@@ -1309,7 +1341,7 @@
           renderConnectionsPage();
         });
     } else if (page === 'manager') {
-      setMobileTitle('Manager accounts');
+      setMobileTitle('Manage accounts');
       renderManagerAccountsPage();
     }
   };
@@ -1356,12 +1388,12 @@
     function loadOrgs() {
       managerSetError('mgr-orgs-error', '');
       if (body) body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">Loading…</td></tr>';
-      return fetchDevAdmin({ action: 'list_orgs' })
+      return fetchDevAdmin({ action: 'list_runway_orgs' })
         .then(function (j) {
           var rows = (j && j.organizations) || [];
           if (!body) return;
           if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">No organizations.</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">No Runway organizations yet.</td></tr>';
             return;
           }
           body.innerHTML = rows.map(function (o) {
@@ -1404,6 +1436,12 @@
           if (body) body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">—</td></tr>';
         });
     }
+
+    try {
+      window.__bizdashMgrRefreshOrgs = function () {
+        return loadOrgs();
+      };
+    } catch (_) {}
 
     function openManagerOrgDetail(orgId, orgName) {
       managerShowDetail(true);
@@ -1493,15 +1531,12 @@
         fetchDevAdmin({ action: 'invite_user', organizationId: orgId, email: email, role: role })
           .then(function (j) {
             var pw = j.temporaryPassword || '';
-            var out =
-              '<div><strong>Email:</strong> ' + escapeHtml(email) + '</div>' +
-              '<div style="margin-top:6px;"><strong>Temporary password:</strong> <code style="font-size:12px;">' +
-              escapeHtml(pw) +
-              '</code></div>' +
-              '<div style="margin-top:8px;color:var(--text3);">On first login, they will be forced to change it.</div>';
+            var out = formatProvisionedInviteHtml(email, pw);
             var box = $('mgr-invite-result');
             if (box) { box.style.display = 'block'; box.innerHTML = out; }
-            loadOrgs();
+            try {
+              if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
+            } catch (_) {}
           })
           .catch(function (e) {
             managerSetError('mgr-invite-error', String((e && e.message) || e || 'Failed'));
@@ -1541,33 +1576,106 @@
         }
         fetchDevAdmin({ action: 'create_org', name: name, slug: slug, adminEmail: adminEmail })
           .then(function (j) {
-            var org = (j && j.organization) || {};
-            var orgId = org.id || '';
-            var orgSlug = org.slug || '';
-            var adminEmail2 = org.admin_email || '';
-            var pw = j.temporaryPassword || '';
             var box = $('dev-org-result');
             if (box) {
               box.style.display = 'block';
-              box.innerHTML =
-                'Created org + provisioned admin.<br><strong>Organization ID:</strong> <code style="font-size:11px;">' +
-                escapeHtml(orgId) +
-                '</code><br><strong>Slug:</strong> <code style="font-size:11px;">' +
-                escapeHtml(orgSlug) +
-                '</code><br><strong>Admin email:</strong> <code style="font-size:11px;">' +
-                escapeHtml(adminEmail2) +
-                '</code><br><strong>Temporary password:</strong> <code style="font-size:11px;">' +
-                escapeHtml(pw) +
-                '</code>';
+              box.innerHTML = formatProvisionedOrgHtml(j);
             }
-            loadOrgs();
+            try {
+              if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
+            } catch (_) {}
           })
           .catch(function (e) {
             managerSetError('dev-org-error', String((e && e.message) || e || 'Failed'));
           });
       });
     }
+
+    var btnPick = $('btn-dev-org-pick-compass');
+    if (btnPick && btnPick.getAttribute('data-wired-manager') !== '1') {
+      btnPick.setAttribute('data-wired-manager', '1');
+      btnPick.addEventListener('click', function () {
+        managerSetError('dev-org-error', '');
+        openCompassOrgPicker();
+      });
+    }
   }
+
+  function openCompassOrgPicker() {
+    var m = $('mgrCompassModal');
+    var body = $('mgr-compass-tbody');
+    var err = $('mgr-compass-error');
+    if (err) err.textContent = '';
+    if (body) body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">Loading…</td></tr>';
+    if (m) m.classList.add('on');
+
+    fetchDevAdmin({ action: 'list_compass_orgs_without_runway' })
+      .then(function (j) {
+        var rows = (j && j.organizations) || [];
+        if (!body) return;
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">No Compass-only organizations found.</td></tr>';
+          return;
+        }
+        body.innerHTML = rows.map(function (o) {
+          var id = escapeHtml(o.id);
+          var nm = escapeHtml(o.name || '');
+          var sl = escapeHtml(o.slug || '');
+          var ae = escapeHtml(o.admin_email || '');
+          var mc = typeof o.member_count === 'number' ? String(o.member_count) : escapeHtml(o.member_count || '');
+          return (
+            '<tr>' +
+              '<td class="tdp">' + nm + '<span class="td-sub"><code style="font-size:11px;">' + id + '</code></span></td>' +
+              '<td><code style="font-size:11px;">/' + sl + '</code></td>' +
+              '<td>' + ae + '</td>' +
+              '<td>' + mc + '</td>' +
+              '<td style="white-space:nowrap;text-align:right;">' +
+                '<button type="button" class="btn btn-p" data-compass-enable-id="' + id + '">Enable Runway</button>' +
+              '</td>' +
+            '</tr>'
+          );
+        }).join('');
+
+        body.querySelectorAll('button[data-compass-enable-id]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var orgId = b.getAttribute('data-compass-enable-id') || '';
+            if (!orgId) return;
+            if (err) err.textContent = '';
+            b.disabled = true;
+            b.textContent = 'Enabling…';
+            fetchDevAdmin({ action: 'enable_runway_for_org', organizationId: orgId })
+              .then(function () {
+                closeCompassOrgPicker();
+                try {
+                  if (window.__bizdashMgrRefreshOrgs) window.__bizdashMgrRefreshOrgs();
+                } catch (_) {}
+              })
+              .catch(function (e) {
+                b.disabled = false;
+                b.textContent = 'Enable Runway';
+                if (err) err.textContent = String((e && e.message) || e || 'Failed');
+              });
+          });
+        });
+      })
+      .catch(function (e) {
+        if (err) err.textContent = String((e && e.message) || e || 'Failed');
+        if (body) body.innerHTML = '<tr><td colspan="5" style="color:var(--text3);padding:14px 16px;">—</td></tr>';
+      });
+  }
+
+  function closeCompassOrgPicker() {
+    var m = $('mgrCompassModal');
+    if (m) m.classList.remove('on');
+  }
+
+  (function wireCompassPickerModal() {
+    var btn = $('btn-mgr-compass-close');
+    if (btn && btn.getAttribute('data-wired') !== '1') {
+      btn.setAttribute('data-wired', '1');
+      btn.addEventListener('click', function () { closeCompassOrgPicker(); });
+    }
+  })();
 
   function statusPill(status) {
     if (status === 'closed') {

@@ -1412,7 +1412,7 @@
     <div class="nav-lbl ui-internal-facing">Developer</div>
     <div class="ni ui-internal-facing" data-nav="manager" onclick="nav('manager',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11h6"/><path d="M20 8v6"/></svg>
-      Manager accounts
+      Manage accounts
     </div>
     <div class="sb-spacer"></div>
   </nav>
@@ -1589,7 +1589,7 @@
   <div class="pg ui-internal-facing" id="page-manager">
     <div class="ph">
       <div>
-        <div class="pt">Manager accounts</div>
+        <div class="pt">Manage accounts</div>
         <div class="ps">Developer-only: organizations, admins, and user provisioning.</div>
       </div>
       <div class="hr">
@@ -1764,6 +1764,7 @@
         </div>
         <div id="dev-org-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-top:10px;"></div>
         <div class="hr" style="margin-top:10px; justify-content:flex-end;">
+          <button type="button" class="btn" id="btn-dev-org-pick-compass">Choose from Compass users</button>
           <button type="button" class="btn btn-p" id="btn-dev-org-create">Create org</button>
         </div>
         <div id="dev-org-result" style="font-size:12px;color:var(--text2);margin-top:10px;display:none;"></div>
@@ -1771,6 +1772,29 @@
 
       <div class="mf" style="margin-top:14px;">
         <button type="button" class="btn" id="btn-dev-admin-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mo dev-admin-pop" id="mgrCompassModal">
+    <div class="md" onclick="event.stopPropagation()" style="max-width:860px;max-height:92vh;display:flex;flex-direction:column;">
+      <div class="mt">Compass organizations</div>
+      <p class="ss" style="margin: -10px 0 14px; font-size: 13px; line-height: 1.55;">
+        Choose an existing Compass organization to enable Runway. Only Compass orgs without Runway are shown.
+      </p>
+
+      <div id="mgr-compass-error" style="font-size:12px;color:var(--red);min-height:1.2em;margin-bottom:10px;"></div>
+      <div style="overflow:auto;border:1px solid var(--border);border-radius:var(--rl);">
+        <table class="dt" style="margin:0;">
+          <thead>
+            <tr><th>Name</th><th>Slug</th><th>Admin email</th><th>Members</th><th style="text-align:right;">Action</th></tr>
+          </thead>
+          <tbody id="mgr-compass-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="mf" style="margin-top:14px;">
+        <button type="button" class="btn" id="btn-mgr-compass-close">Close</button>
       </div>
     </div>
   </div>
